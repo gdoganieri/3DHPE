@@ -1,11 +1,13 @@
 import cv2
+import mediapipe as mp
 import math
 import time
+import sys
 import os
 import os.path as osp
+import argparse
 import numpy as np
 import torch
-import argparse
 import torchvision.transforms as transforms
 from torch.nn.parallel.data_parallel import DataParallel
 import torch.backends.cudnn as cudnn
@@ -18,6 +20,7 @@ from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
 from posenet.common.utils.pose_utils import process_bbox, pixel2cam
 
+
 rootnet_path = os.getcwd() + "/rootnet"
 
 from rootnet.main.config import cfg as rootnet_cfg
@@ -28,8 +31,11 @@ from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_
 import torchvision
 
 from pathlib import Path
-from posenet.common.utils.vis import vis_keypoints
-from d_visualization import depthmap2pointcloud
+from posenet.common.utils.vis import vis_keypoints, vis_3d_multiple_skeleton, \
+    vis_3d_multiple_skeleton_no_show_but_savefig, vis_3d_multiple_skeleton_and_pointcloud
+from d_visualization import depthmap2pointcloud, plot_skeletons
+import matplotlib.pyplot as plt
+
 
 def main():
     # FASTER RCNN v3 320 fpn
@@ -43,64 +49,43 @@ def main():
         transforms.ToTensor(),
     ])
 
-    def parse_args():
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--gpu', type=str, dest='gpu_ids')
-        parser.add_argument('--weights', type=str, dest='weights')
-        parser.add_argument('--source', type=str, dest='source')
-        parser.add_argument('--sequence', type=str, dest='sequence')
-        args = parser.parse_args()
-
-        # test gpus
-        if not args.gpu_ids:
-            assert 0, print("Please set proper gpu ids")
-
-        if '-' in args.gpu_ids:
-            gpus = args.gpu_ids.split('-')
-            gpus[0] = 0 if not gpus[0].isdigit() else int(gpus[0])
-            gpus[1] = len(mem_info()) if not gpus[1].isdigit() else int(gpus[1]) + 1
-            args.gpu_ids = ','.join(map(lambda x: str(x), list(range(*gpus))))
-
-        assert args.weights, 'Pretrained weights are required.'
-        assert args.source, 'Source is required.'
-        assert args.sequence, 'Sequence is required.'
-        return args
-
-    # argument parsing
-    args = parse_args()
-
-    posenet_cfg.set_args(args.gpu_ids)
+    # def parse_args():
+    #     parser = argparse.ArgumentParser()
+    #     parser.add_argument('--gpu', type=str, dest='gpu_ids')
+    #     # parser.add_argument('--test_epoch', type=str, dest='test_epoch')
+    #     args = parser.parse_args()
+    #
+    #     # test gpus
+    #     if not args.gpu_ids:
+    #         assert 0, print("Please set proper gpu ids")
+    #
+    #     if '-' in args.gpu_ids:
+    #         gpus = args.gpu_ids.split('-')
+    #         gpus[0] = 0 if not gpus[0].isdigit() else int(gpus[0])
+    #         gpus[1] = len(mem_info()) if not gpus[1].isdigit() else int(gpus[1]) + 1
+    #         args.gpu_ids = ','.join(map(lambda x: str(x), list(range(*gpus))))
+    #
+    #     # assert args.test_epoch, 'Test epoch is required.'
+    #     return args
+    #
+    # # argument parsing
+    # args = parse_args()
+    #
+    # posenet_cfg.set_args(args.gpu_ids)
     cudnn.benchmark = True
 
-    # Check the weights to load to find how to build the skeleton
-    weights = args.weights
-    if weights == "MuCo":
-        # MuCo joint set
-        joint_num = 21
-        joints_name = ('Head_top', 'Thorax', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'L_Shoulder', 'L_Elbow', 'L_Wrist',
-                       'R_Hip', 'R_Knee', 'R_Ankle', 'L_Hip', 'L_Knee', 'L_Ankle', 'Pelvis', 'Spine', 'Head', 'R_Hand',
-                       'L_Hand', 'R_Toe', 'L_Toe')
-        flip_pairs = ((2, 5), (3, 6), (4, 7), (8, 11), (9, 12), (10, 13), (17, 18), (19, 20))
-        skeleton = ((0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12),
-                    (12, 13), (13, 20), (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
-        model_path_posenet = 'snapshot_24_MuCo+MSCOCO.pth.tar'
-        model_path_rootnet = 'snapshot_18_MuCo+MSCOCO.pth.tar'
-
-    elif weights == "H36M":
-        # Human36 joint set
-        joint_num = 18
-        joints_name = ('Pelvis', 'R_Hip', 'R_Knee', 'R_Ankle', 'L_Hip', 'L_Knee', 'L_Ankle', 'Torso', 'Neck', 'Nose',
-                       'Head', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'Thorax')
-        flip_pairs = ( (1, 4), (2, 5), (3, 6), (14, 11), (15, 12), (16, 13) )
-        skeleton = ( (0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
-                     (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6) )
-        model_path_posenet = 'snapshot_24_H36M+MPII.pth.tar'
-        model_path_rootnet = 'snapshot_19_H36M+MPII.pth.tar'
-    else:
-        assert 'Pretrained weights are required.'
-        return -1
+    # MuCo joint set
+    joint_num = 21
+    joints_name = (
+    'Head_top', 'Thorax', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'R_Hip', 'R_Knee',
+    'R_Ankle', 'L_Hip', 'L_Knee', 'L_Ankle', 'Pelvis', 'Spine', 'Head', 'R_Hand', 'L_Hand', 'R_Toe', 'L_Toe')
+    flip_pairs = ((2, 5), (3, 6), (4, 7), (8, 11), (9, 12), (10, 13), (17, 18), (19, 20))
+    skeleton = (
+    (0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12), (12, 13), (13, 20),
+    (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
 
     # snapshot load posenet
+    model_path_posenet = 'snapshot_24.pth.tar'
     assert osp.exists(model_path_posenet), 'Cannot find model at ' + model_path_posenet
     print('Load checkpoint from {}'.format(model_path_posenet))
     model = get_pose_net(posenet_cfg, False, joint_num)
@@ -110,6 +95,7 @@ def main():
     model.eval()
 
     # snapshot load rootnet
+    model_path_rootnet = 'snapshot_18.pth.tar'
     assert osp.exists(model_path_rootnet), 'Cannot find model at ' + model_path_rootnet
     print('Load checkpoint from {}'.format(model_path_rootnet))
     rootnet_model = get_root_net(rootnet_cfg, False)
@@ -123,29 +109,16 @@ def main():
     posenet_transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(mean=posenet_cfg.pixel_mean, std=posenet_cfg.pixel_std)])
 
-    sequence = args.sequence
-    source = args.source
-    if source == "pico":
-        data_dir = Path("data/pico/")
-        rgb_data_dir = data_dir / "rgb" / sequence
-        depth_data_dir = data_dir / "depth" / sequence
-    elif source == "kinect":
-        data_dir = Path("data/kinect/")
-        rgb_data_dir = data_dir / sequence / "RGB"
-        depth_data_dir = data_dir / sequence / "DEPTH"
-    else:
-        data_dir = Path("frames/")
-        rgb_data_dir = data_dir
-        depth_data_dir = None
-
-
+    data_dir = Path("data/kinect/")
 
     # rgb camera intrinsics
-    # intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
-    # focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
-    # princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
+    intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
+    focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
+    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
 
-
+    sequence = "001"
+    rgb_data_dir = data_dir/sequence/"RGB"
+    depth_data_dir = data_dir / sequence / "DEPTH"
 
     focal_rgb = [678, 678]
     princpt_rgb = [318, 228]
@@ -188,7 +161,6 @@ def main():
             bbox = rootnet_process_bbox(np.array(bbox_list[n]), original_img_width, original_img_height)
             img, img2bb_trans = rootnet_generate_patch_image(original_img, bbox, False, 0.0)
             img = rootnet_transform(img).cpu()[None, :, :, :]
-
             k_value = np.array([math.sqrt(
                 rootnet_cfg.bbox_real[0] * rootnet_cfg.bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
                             bbox[2] * bbox[3]))]).astype(np.float32)
@@ -236,10 +208,20 @@ def main():
         focal_rgb = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
         princpt_rgb = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
 
+        rgb_frame_name = filename.stem
+
+        depth_frame_filename = process.extract(rgb_frame_name, depth_data_dir.iterdir(), limit=1)[0][0]
+
+        depth = cv2.imread(str(depth_frame_filename), -1)
+        pointcloud = depthmap2pointcloud(depth, focal_rgb[0], focal_rgb[1], princpt_rgb[0], princpt_rgb[1])
+
+
         print("time:%.4f," % (time.time() - whole_time), "boxes:%.4f," % (time.time() - boxes_time),
               "pose:%.4f" % (time.time() - pose_time))
 
-        # extract 2d poses
+        #cv2.imwrite("frame.jpg", original_img)
+
+        # visualize 2d poses
         vis_img = original_img.copy()
         for n in range(person_num):
             vis_kps = np.zeros((3, joint_num))
@@ -253,26 +235,17 @@ def main():
                                    (0, 255, 0), thickness=1)
             vis_img = img_2d
 
-        # find the depth frame correspondent to the rgb frame
-        rgb_frame_name = filename.stem
-        if source == "pico":
-            rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
-            rgb_timestamp = rgb_time_table[np.where(rgb_time_table[:, 0] == rgb_frame_name)[0][0]][1]
-            depth_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
-            depth_timestamp = process.extract(rgb_timestamp, depth_time_table[:, 1], limit=1)[0][0]
-            depth_frame_name = depth_time_table[np.where(depth_time_table[:, 1] == depth_timestamp)[0][0]][0]
-            depth = cv2.imread(f'{depth_data_dir / depth_frame_name}.png', -1)
-        elif source == "kinect":
-            depth_frame_filename = process.extract(rgb_frame_name, depth_data_dir.iterdir(), limit=1)[0][0]
-            depth = cv2.imread(str(depth_frame_filename), -1)
-        else:
-            depth = np.zeros([original_img_width,original_img_height])
-        pointcloud = depthmap2pointcloud(depth, focal_rgb[0], focal_rgb[1], princpt_rgb[0], princpt_rgb[1])
         points = np.array([output_pose_3d, pointcloud, vis_img])
 
-        output_dir = Path(f"results/{source}/{sequence}_{weights}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+        np.save(f"results/kinect/{sequence}/{nFrame:05}_pose3D.npy", points)
+        #cv2.imwrite("pose2d.jpg", vis_img)
+
+        #vis_kps = np.array(output_pose_3d)
+        # vis_3d_multiple_skeleton(vis_kps, np.ones_like(vis_kps), skeleton,
+        #                                              'output_pose_3d (x,y,z: camera-centered. mm.)', pointcloud)
+        #vis_3d_multiple_skeleton_and_pointcloud(vis_kps, np.ones_like(vis_kps), skeleton,
+        #                                               'output_pose_3d (x,y,z: camera-centered. mm.)', pointcloud)
+    # plt.show()
 
 if __name__ == "__main__":
     main()
