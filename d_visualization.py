@@ -1,3 +1,4 @@
+
 import matplotlib.pyplot as plt
 import numpy as np
 import typing as tp
@@ -127,6 +128,26 @@ def plot_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.L
 
     plt.show()
 
+
+def plot_skeletons_rot(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                   pointcloud, angle, pose2D):
+    fig = plt.figure("Pointcloud + Skeleton")
+    # ax = fig.add_subplot(1, 1, 1, projection='3d')
+    ax = plt.axes(projection="3d")
+    for skeleton in skeletons:
+        chains = get_chains(skeleton, *chains_ixs)
+        subplot_nodes(skeleton, ax)
+        subplot_bones(chains, ax)
+    ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
+    ax.view_init(10, -angle)
+    ax.dist = 8
+
+    ax = fig.add_subplot(3, 3, 9)
+    ax = plt.imshow(pose2D[:, :, ::-1])
+    mng = plt.get_current_fig_manager()
+    mng.window.state('zoomed')
+
+    plt.show()
 
 
 

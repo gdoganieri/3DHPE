@@ -254,7 +254,7 @@ def main():
             vis_img = img_2d
 
         # find the depth frame correspondent to the rgb frame
-        rgb_frame_name = filename.stem
+        rgb_frame_name = f"{(int(filename.stem)-1):05}"
         if source == "pico":
             rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
             rgb_timestamp = rgb_time_table[np.where(rgb_time_table[:, 0] == rgb_frame_name)[0][0]][1]
