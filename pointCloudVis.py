@@ -16,6 +16,15 @@ def rotate_poses(poses_3d, R, t):
 
     return poses_3d
 
+def rotate_points(points_3D, R, t):
+    R_inv = np.linalg.inv(R)
+    for point in points_3D:
+        point = point.transpose()
+        point = np.dot(R_inv, point - t)
+        point = point.transpose()
+
+    return points_3D
+
 def vis(weights, source, sequence):
     if weights == "MuCo":
         skeleton = ((0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12),
@@ -35,20 +44,19 @@ def vis(weights, source, sequence):
 
     result_dir = Path(f"results/{source}/{sequence}_{weights}")
 
+
     for filepath in result_dir.iterdir():
         result = np.load(str(filepath), allow_pickle=True)
         output_pose_3d = result[0]
         pointcloud = result[1]
+        # pointcloud = rotate_points(result[1], R, t)
         output_pose_2d = result[2]
 
         cv2.imshow("2DPose", output_pose_2d)
         # output_pose_3d = rotate_poses(output_pose_3d, R, t)
         plot_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :])
 
-# with open('extrinsics.json', 'r') as f:
-#     extrinsics = json.load(f)
-# R = np.array(extrinsics['R'], dtype=np.float32)
-# t = np.array(extrinsics['t'], dtype=np.float32)
+
 #
 # vis_kps = np.array(output_pose_3d)
 # vis_3d_multiple_skeleton_and_pointcloud(vis_kps, np.ones_like(vis_kps), skeleton,
@@ -71,6 +79,11 @@ def main():
 
     # argument parsing
     args = parse_args()
+
+    # with open(f'data/{args.source}/extrinsics.json', 'r') as f:
+    #     extrinsics = json.load(f)
+    # R = np.array(extrinsics['R'], dtype=np.float32)
+    # t = np.array(extrinsics['t'], dtype=np.float32)
 
     vis(args.weights, args.source, args.sequence)
 

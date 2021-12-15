@@ -141,14 +141,14 @@ def main():
 
 
     # rgb camera intrinsics
-    # intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
-    # focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
-    # princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
+    intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
+    focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
+    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
 
 
 
-    focal_rgb = [678, 678]
-    princpt_rgb = [318, 228]
+    # focal_rgb = [678, 678]
+    # princpt_rgb = [318, 228]
 
     # iterate on the frames
     for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
@@ -233,10 +233,10 @@ def main():
 
         #intrinsicts parameters depth camera
         intrinsics_depth = np.loadtxt(str(data_dir/"intrinsics_depth.txt"), dtype='f', delimiter=',')
-        focal_rgb = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
-        princpt_rgb = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
+        focal_depth = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
+        princpt_depth = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
 
-        print("time:%.4f," % (time.time() - whole_time), "boxes:%.4f," % (time.time() - boxes_time),
+        print("FRAME:" +str(nFrame)+" time:%.4f," % (time.time() - whole_time), "boxes:%.4f," % (time.time() - boxes_time),
               "pose:%.4f" % (time.time() - pose_time))
 
         # extract 2d poses
@@ -267,7 +267,7 @@ def main():
             depth = cv2.imread(str(depth_frame_filename), -1)
         else:
             depth = np.zeros([original_img_width,original_img_height])
-        pointcloud = depthmap2pointcloud(depth, focal_rgb[0], focal_rgb[1], princpt_rgb[0], princpt_rgb[1])
+        pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
         points = np.array([output_pose_3d, pointcloud, vis_img])
 
         output_dir = Path(f"results/{source}/{sequence}_{weights}")
