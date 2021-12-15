@@ -5,7 +5,7 @@ import os
 import json
 from pathlib import Path
 from posenet.common.utils.vis import vis_3d_multiple_skeleton_and_pointcloud
-from d_visualization import plot_skeletons, plot_skeletons_rot
+from d_visualization import plot_skeletons, save_result_rot
 
 def rotate_poses(poses_3d, R, t):
     R_inv = np.linalg.inv(R)
@@ -44,6 +44,8 @@ def vis(weights, source, sequence):
 
     result_dir = Path(f"results/{source}/{sequence}_{weights}")
 
+    plot_dir = Path(f"plot/{source}/{sequence}_{weights}")
+    plot_dir.mkdir(parents=True, exist_ok=True)
 
     for resNum, filepath in enumerate(result_dir.iterdir()):
         result = np.load(str(filepath), allow_pickle=True)
@@ -53,13 +55,9 @@ def vis(weights, source, sequence):
         output_pose_2d = result[2]
         # cv2.imshow("2DPose", output_pose_2d)
         # output_pose_3d = rotate_poses(output_pose_3d, R, t)
-        if resNum <=360:
-            angle = resNum
-        elif resNum <= 720:
-            angle = resNum - 360
-        else:
-            angle = resNum - 720
-        plot_skeletons_rot(output_pose_3d, chain_ixs, pointcloud[::50, :], angle, output_pose_2d)
+
+        save_result_rot(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir)
+        print(str(resNum))
         # plot_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :])
 
 
