@@ -107,8 +107,8 @@ def get_chains(dots: np.ndarray, arms_chain_ixs: tp.List[int], torso_chain_ixs: 
             get_chain_dots(dots, legs_chain_ixs))
 
 
-def subplot_nodes(dots: np.ndarray, ax):
-    return ax.scatter3D(dots[:, 0], dots[:, 2], -dots[:, 1], c=dots[:, 2])
+def subplot_nodes(dots: np.ndarray, ax, c):
+    return ax.scatter3D(dots[:, 0], dots[:, 2], -dots[:, 1], c=c)
 
 
 def subplot_bones(chains: tp.Tuple[np.ndarray, ...], ax):
@@ -121,10 +121,18 @@ def plot_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.L
     ax = plt.axes(projection="3d")
     for skeleton in skeletons:
         chains = get_chains(skeleton, *chains_ixs)
-        subplot_nodes(skeleton, ax)
+        subplot_nodes(skeleton, ax, skeleton[:, 2])
         subplot_bones(chains, ax)
     ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
     ax.view_init(10, 240)
+    ax.dist = 8
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('z')
+    ax.set_zlabel('y')
+
+    # mng = plt.get_current_fig_manager()
+    # mng.window.state('zoomed')
 
     plt.show()
 
@@ -136,7 +144,7 @@ def save_result_rot(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.
     ax = plt.axes(projection="3d")
     for skeleton in skeletons:
         chains = get_chains(skeleton, *chains_ixs)
-        subplot_nodes(skeleton, ax)
+        subplot_nodes(skeleton, ax, skeleton[:,2])
         subplot_bones(chains, ax)
     ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
     if resNum <= 360:
@@ -162,7 +170,73 @@ def save_result_rot(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.
     plt.clf()
     # plt.show()
 
+# save the result with a constant rotation of the scene
+def save_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Sequence[np.ndarray]]], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                   pointcloud, pose2D, plot_dir):
+    fig = plt.figure("Pointcloud + Skeleton")
+    colors = ['r', 'g', 'b', 'y', 'c']
+    labels = ['2000', '2150', '2300', '2450', '2600']
+    # ax = fig.add_subplot(1, 1, 1, projection='3d')
 
+
+    for nFrames, skeletons_20 in enumerate(output_pose_3d[0].values()):
+        ax = plt.axes(projection="3d")
+        skeletons_2150 = output_pose_3d[1][nFrames]
+        skeletons_2300 = output_pose_3d[2][nFrames]
+        skeletons_2450 = output_pose_3d[3][nFrames]
+        skeletons_2600 = output_pose_3d[4][nFrames]
+        for nSkel, skeleton in enumerate(skeletons_20):
+            pointcloud_small = pointcloud[nFrames][::50]
+            chains = get_chains(skeleton, *chains_ixs)
+            subplot_nodes(skeleton, ax, colors[0])
+            subplot_bones(chains, ax)
+            ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[0], color=colors[0])
+            ax.scatter3D(pointcloud_small[:, 0], pointcloud_small[:, 2], pointcloud_small[:, 1], s=2, c='steelblue')
+        for skeleton in skeletons_2150:
+            chains = get_chains(skeleton, *chains_ixs)
+            subplot_nodes(skeleton, ax, colors[1])
+            subplot_bones(chains, ax)
+            ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[1], color=colors[1])
+        for skeleton in skeletons_2300:
+            chains = get_chains(skeleton, *chains_ixs)
+            subplot_nodes(skeleton, ax, colors[2])
+            subplot_bones(chains, ax)
+            ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[2], color=colors[2])
+        for skeleton in skeletons_2450:
+            chains = get_chains(skeleton, *chains_ixs)
+            subplot_nodes(skeleton, ax, colors[3])
+            subplot_bones(chains, ax)
+            ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[3], color=colors[3])
+        for skeleton in skeletons_2600:
+            chains = get_chains(skeleton, *chains_ixs)
+            subplot_nodes(skeleton, ax, colors[4])
+            subplot_bones(chains, ax)
+            ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[4], color=colors[4])
+
+
+
+        if nFrames <= 360:
+            angle = nFrames
+        elif nFrames <= 720:
+            angle = nFrames - 360
+        else:
+            angle = nFrames - 720
+
+        ax.view_init(10, -angle)
+        ax.dist = 8
+
+        ax.set_xlabel('x')
+        ax.set_ylabel('z')
+        ax.set_zlabel('y')
+        fig.add_subplot(3, 3, 9)
+        plt.imshow(pose2D[nFrames][:, :, ::-1])
+        mng = plt.get_current_fig_manager()
+        mng.window.state('zoomed')
+
+        plt.savefig(f"{plot_dir}/{nFrames:05}.png")
+        plt.clf()
+        # plt.show()
+        # plt.clf()
 
 # if __name__ == "__main__":
 #     intrinsic = [

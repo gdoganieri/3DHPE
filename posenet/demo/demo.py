@@ -4,7 +4,7 @@
 
 
 
-# python demo.py --gpu 0 --test_epoch 24
+# python demo_frames_odd.py --gpu 0 --test_epoch 24
 
 
 

@@ -49,6 +49,7 @@ def main():
         parser.add_argument('--weights', type=str, dest='weights')
         parser.add_argument('--source', type=str, dest='source')
         parser.add_argument('--sequence', type=str, dest='sequence')
+        parser.add_argument('--bboxdiff', type=bool, dest='bboxdiff')
         args = parser.parse_args()
 
         # test gpus
@@ -85,6 +86,7 @@ def main():
                     (12, 13), (13, 20), (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
         model_path_posenet = 'snapshot_24_MuCo+MSCOCO.pth.tar'
         model_path_rootnet = 'snapshot_18_MuCo+MSCOCO.pth.tar'
+        bbox_real = rootnet_cfg.bbox_real_MuCo
 
     elif weights == "H36M":
         # Human36 joint set
@@ -96,6 +98,7 @@ def main():
                      (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6) )
         model_path_posenet = 'snapshot_24_H36M+MPII.pth.tar'
         model_path_rootnet = 'snapshot_19_H36M+MPII.pth.tar'
+        bbox_real = rootnet_cfg.bbox_real_Human36M
     else:
         assert 'Pretrained weights are required.'
         return -1
@@ -125,6 +128,8 @@ def main():
 
     sequence = args.sequence
     source = args.source
+    bboxdiff = args.bboxdiff
+
     if source == "pico":
         data_dir = Path("data/pico/")
         rgb_data_dir = data_dir / "rgb" / sequence
@@ -191,7 +196,7 @@ def main():
                 img = rootnet_transform(img).cpu()[None, :, :, :]
 
                 k_value = np.array([math.sqrt(
-                    rootnet_cfg.bbox_real[0] * rootnet_cfg.bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
+                    bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
                                 bbox[2] * bbox[3]))]).astype(np.float32)
                 k_value = torch.FloatTensor([k_value]).cpu()[None, :]
 
@@ -270,10 +275,16 @@ def main():
                 depth = np.zeros([original_img_width,original_img_height])
             pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
             points = np.array([output_pose_3d, pointcloud, vis_img])
+            # points = np.array([output_pose_3d])
 
-            output_dir = Path(f"results/{source}/{sequence}_{weights}")
-            output_dir.mkdir(parents=True, exist_ok=True)
-            np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+            if bboxdiff == True:
+                output_dir = Path(f"results/{source}/{sequence}_{weights}_20")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+            else:
+                output_dir = Path(f"results/{source}/{sequence}_{weights}")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
         continue
 
 if __name__ == "__main__":

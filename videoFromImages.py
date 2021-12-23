@@ -2,10 +2,10 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-source = 'kinect'
-weights = 'MuCo'
+source = 'pico'
+weights = 'H36M'
 sequence = '004'
-result_dir = Path(f"{source}/{sequence}_{weights}")
+result_dir = Path(f"{source}/multiSet/{sequence}_{weights}")
 plot_dir = Path(f"plot/{result_dir}/")
 
 img_array = []
@@ -15,7 +15,7 @@ for filename in plot_dir.iterdir():
     size = (width, height)
     img_array.append(img)
 
-out = cv2.VideoWriter(f'plot/{source}_{sequence}_{weights}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15, size)
+out = cv2.VideoWriter(f'plot/multiset_{source}_{sequence}_{weights}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15, size)
 
 for i in range(len(img_array)):
     out.write(img_array[i])

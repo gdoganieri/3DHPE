@@ -35,7 +35,8 @@ class Config:
     output_shape = (input_shape[0]//4, input_shape[1]//4)
     pixel_mean = (0.485, 0.456, 0.406)
     pixel_std = (0.229, 0.224, 0.225)
-    bbox_real = (2000, 2000) # Human36M, MuCo, MuPoTS: (2000, 2000), PW3D: (2, 2)
+    bbox_real_MuCo = (2000, 2000) # Human36M, MuCo, MuPoTS: (2000, 2000), PW3D: (2, 2)
+    bbox_real_Human36M = (2450, 2450)
 
     ## training config
     lr_dec_epoch = [17]
