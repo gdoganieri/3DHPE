@@ -38,6 +38,34 @@ def vis_keypoints(img, kps, kps_lines, kp_thresh=0.4, alpha=1):
     # Blend the keypoints.
     return cv2.addWeighted(img, 1.0 - alpha, kp_mask, alpha, 0)
 
+def vis_keypoints_track(img, kps, kps_lines, color, kp_thresh=0.4, alpha=1):
+
+    # Perform the drawing on a copy of the image, to allow for blending.
+    kp_mask = np.copy(img)
+
+    # Draw the keypoints.
+    for l in range(len(kps_lines)):
+        i1 = kps_lines[l][0]
+        i2 = kps_lines[l][1]
+        p1 = kps[0, i1].astype(np.int32), kps[1, i1].astype(np.int32)
+        p2 = kps[0, i2].astype(np.int32), kps[1, i2].astype(np.int32)
+        if kps[2, i1] > kp_thresh and kps[2, i2] > kp_thresh:
+            cv2.line(
+                kp_mask, p1, p2,
+                color=color, thickness=2, lineType=cv2.LINE_AA)
+        if kps[2, i1] > kp_thresh:
+            cv2.circle(
+                kp_mask, p1,
+                radius=3, color=color, thickness=-1, lineType=cv2.LINE_AA)
+        if kps[2, i2] > kp_thresh:
+            cv2.circle(
+                kp_mask, p2,
+                radius=3, color=color, thickness=-1, lineType=cv2.LINE_AA)
+
+    # Blend the keypoints.
+    return cv2.addWeighted(img, 1.0 - alpha, kp_mask, alpha, 0)
+
+
 def vis_3d_skeleton(kpt_3d, kpt_3d_vis, kps_lines, filename=None):
 
     fig = plt.figure()

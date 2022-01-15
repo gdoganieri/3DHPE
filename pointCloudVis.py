@@ -5,7 +5,7 @@ import os
 import json
 from pathlib import Path
 from posenet.common.utils.vis import vis_3d_multiple_skeleton_and_pointcloud
-from d_visualization import plot_skeletons, save_result_rot, save_skeletons_different_bboxset
+from d_visualization import plot_skeletons, save_result_rot, save_skeletons_different_bboxset, plot_skeletons_track
 
 def rotate_poses(poses_3d, R, t):
     R_inv = np.linalg.inv(R)
@@ -25,12 +25,12 @@ def rotate_points(points_3D, R, t):
 
     return points_3D
 
-def vis(weights, source, sequence):
+def vis(weights, source, sequence, tracking):
     if weights == "MuCo":
         skeleton = ((0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12),
                     (12, 13), (13, 20), (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
         chain_ixs = ([18, 7, 6, 5, 1, 2, 3, 4, 17],  # L_Hand, L_Wrist, L_Elbow, L_Shoulder, Thorax, R_Shoulder, R_Elbow, R_Wrist, R_Hand
-                     [14, 1, 15, 16, 0],  # Pelvis, Thorax, Spine, Head, Head_top
+                     [14, 15, 1, 16, 0],  # Pelvis, Thorax, Spine, Head, Head_top
                      [20, 13, 12, 11, 14, 8, 9, 10, 19])  # L_Toe, L_Ankle, L_Knee, L_Hip, Pelvis, R_Hip, R_Knee, R_Ankle, R_Toe
     elif weights == "H36M":
         skeleton = ((0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
@@ -42,9 +42,9 @@ def vis(weights, source, sequence):
         assert "Cannot visualize a correct pose. Not enough information provided."
         return -1
 
-    result_dir = Path(f"results/{source}/{sequence}_{weights}")
+    result_dir = Path(f"results/tracking/{source}/{sequence}_{weights}")
 
-    plot_dir = Path(f"plot/{source}/{sequence}_{weights}")
+    plot_dir = Path(f"plot/tracking/{source}/{sequence}_{weights}")
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     for resNum, filepath in enumerate(result_dir.iterdir()):
@@ -60,7 +60,13 @@ def vis(weights, source, sequence):
 
         # save_result_rot(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir)
         print(str(resNum))
-        plot_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :])
+        if tracking:
+            tracking_predictions = result[3]
+            tracking_colors = np.array(result[4])/255
+            tracking_id = result[5]
+            plot_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :],resNum, output_pose_2d, plot_dir, tracking_predictions, tracking_colors, tracking_id)
+        else:
+            plot_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :])
 
 
 #
@@ -122,6 +128,7 @@ def main():
         parser.add_argument('--weights', type=str, dest='weights')
         parser.add_argument('--source', type=str, dest='source')
         parser.add_argument('--sequence', type=str, dest='sequence')
+        parser.add_argument('--tracking', type=bool, dest='tracking', default=False)
         args = parser.parse_args()
 
         assert args.weights, 'Pretrained weights are required.'
@@ -137,7 +144,7 @@ def main():
     # R = np.array(extrinsics['R'], dtype=np.float32)
     # t = np.array(extrinsics['t'], dtype=np.float32)
 
-    # vis(args.weights, args.source, args.sequence)
-    vis_multi_bboxset(args.weights, args.source, args.sequence)
+    vis(args.weights, args.source, args.sequence, args.tracking)
+    # vis_multi_bboxset(args.weights, args.source, args.sequence)
 if __name__ == "__main__":
     main()
