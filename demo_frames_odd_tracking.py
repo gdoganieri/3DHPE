@@ -30,15 +30,12 @@ import torchvision
 
 from pathlib import Path
 from posenet.common.utils.vis import vis_keypoints, vis_keypoints_track
-from d_visualization import depthmap2pointcloud
+from d_visualization import depthmap2pointcloud, pixel2world
 
-track_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-                    (127, 127, 255), (255, 0, 255), (255, 127, 255),
-                    (127, 0, 255), (127, 0, 127), (127, 10, 255), (0, 255, 127)]
-def skeleton_track(centers, frame, tracker, bboxes):
+def root_track(skeletons, frame, tracker, root_pt):
 
-    if (len(centers)>0):
-        tracker.update(centers)
+    if (len(skeletons)>0):
+        tracker.update(skeletons, root_pt)
         for i in range(len(tracker.tracks)):
             color = tracker.tracks[i].track_color
             if len(tracker.tracks[i].trace) > 1:
@@ -51,7 +48,22 @@ def skeleton_track(centers, frame, tracker, bboxes):
                 cv2.circle(frame, (x, y), 5, color, -1)
             # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
     return tracker
+def skeleton_track(skeletons, frame, tracker, bboxes):
 
+    if (len(skeletons)>0):
+        tracker.update(skeletons)
+        for i in range(len(tracker.tracks)):
+            color = tracker.tracks[i].track_color
+            if len(tracker.tracks[i].trace) > 1:
+                x = int(tracker.tracks[i].trace[-1][0, 0])
+                y = int(tracker.tracks[i].trace[-1][0, 1])
+                for k in range(len(tracker.tracks[i].trace)):
+                    x = int(tracker.tracks[i].trace[k][0, 0])
+                    y = int(tracker.tracks[i].trace[k][0, 1])
+                    cv2.circle(frame, (x, y), 3, color, -1)
+                cv2.circle(frame, (x, y), 5, color, -1)
+            # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
+    return tracker
 
 def main():
     # FASTER RCNN v3 320 fpn
@@ -110,7 +122,6 @@ def main():
         model_path_rootnet = 'snapshot_18_MuCo+MSCOCO.pth.tar'
         bbox_real = rootnet_cfg.bbox_real_MuCo
         root_pt = 14
-
     elif weights == "H36M":
         # Human36 joint set
         joint_num = 18
@@ -154,6 +165,7 @@ def main():
     source = args.source
     bboxdiff = args.bboxdiff
 
+    # path management
     if source == "pico":
         data_dir = Path("data/pico/")
         rgb_data_dir = data_dir / "rgb" / sequence
@@ -167,23 +179,19 @@ def main():
         rgb_data_dir = data_dir
         depth_data_dir = None
 
-
-
     # rgb camera intrinsics
     intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
     focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
     princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
 
-
-
     # focal_rgb = [678, 678]
     # princpt_rgb = [318, 228]
 
-    tracker = Tracker(150, 30, 5)
+    tracker = Tracker(1000, 30, 5)
 
     # iterate on the frames
     for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
-        if nFrame%2 == 0 and nFrame > 100:
+        if nFrame%2 == 0 and nFrame > 175:
             original_img = cv2.imread(str(rgb_data_dir/filename.name))
             if original_img is None:
                 print("Loading image failed.")
@@ -258,11 +266,11 @@ def main():
                 img2bb_trans_001 = np.concatenate((img2bb_trans, np.array([0, 0, 1]).reshape(1, 3)))
                 pose_3d[:, :2] = np.dot(np.linalg.inv(img2bb_trans_001), pose_3d_xy1.transpose(1, 0)).transpose(1, 0)[:, :2]
                 output_pose_2d[n] = pose_3d[:, :2]
-                outpose_tracking[n] = pose_3d
 
                 # root-relative discretized depth -> absolute continuous depth
                 pose_3d[:, 2] = (pose_3d[:, 2] / posenet_cfg.depth_dim * 2 - 1) * (posenet_cfg.bbox_3d_shape[0] / 2) + \
                                 root_depth_list[n]
+                outpose_tracking[n] = pose_3d
                 pose_3d = pixel2cam(pose_3d, focal_rgb, princpt_rgb)
                 output_pose_3d[n] = pose_3d
 
@@ -276,22 +284,35 @@ def main():
 
             # tracking
             vis_img = original_img.copy()
-            tracker = skeleton_track(outpose_tracking[:, root_pt], vis_img, tracker, bbox_list_copy)
+
+            tracker = root_track(outpose_tracking, vis_img, tracker, root_pt)
+            # tracker = skeleton_track(outpose_tracking, vis_img, tracker, bbox_list_copy)
 
             tracking_predictions = []
             tracking_colors = []
             tracking_id = []
-            for n in range(len(tracker.tracks)):
-                tracking_predictions.append(cam2pixel(tracker.tracks[n].trace[-1], focal_rgb, princpt_rgb))
-                tracking_colors.append(tracker.tracks[n].track_color)
-                tracking_id.append(tracker.tracks[n].trackId)
+            tracking_traces = []
+            for i in range(len(tracker.tracks)):
+                if len(tracker.tracks[i].trace) > 1:
+                    tracking_predictions.append(np.array(pixel2world(int(tracker.tracks[i].trace[-1][0, 0]),
+                                                            int(tracker.tracks[i].trace[-1][0, 1]),
+                                                            int(tracker.tracks[i].trace[-1][0, 2]),
+                                                            original_img_width, original_img_height,
+                                                            focal_rgb[0], focal_rgb[1],
+                                                            princpt_rgb[0], princpt_rgb[1])))
+                    tracking_colors.append(tracker.tracks[i].track_color)
+                    tracking_id.append(tracker.tracks[i].trackId)
+                # for k in range(len(tracker.tracks[n].trace)):
+                #     tracking_traces.append(pixel2cam(tracker.tracks[n].trace[k], focal_rgb, princpt_rgb))
 
 
             # extract 2d poses
             for n in range(person_num):
                 vis_kps = np.zeros((3, joint_num))
-                vis_kps[0, :] = output_pose_2d[n][:, 0]
-                vis_kps[1, :] = output_pose_2d[n][:, 1]
+                # vis_kps[0, :] = output_pose_2d[n][:, 0]
+                # vis_kps[1, :] = output_pose_2d[n][:, 1]
+                vis_kps[0, :] = tracker.tracks[n].track_skeleton[:,0]
+                vis_kps[1, :] = tracker.tracks[n].track_skeleton[:,1]
                 vis_kps[2, :] = 1
                 img_2d = vis_keypoints_track(vis_img, vis_kps, skeleton, tracker.tracks[n].track_color)
                 img_2d = cv2.rectangle(img_2d,
@@ -308,7 +329,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
 
-            # # find the depth frame correspondent to the rgb frame
+            # find the depth frame correspondent to the rgb frame
             rgb_frame_name = f"{(int(filename.stem)-1):05}"
             if source == "pico":
                 rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
@@ -323,7 +344,10 @@ def main():
             else:
                 depth = np.zeros([original_img_width,original_img_height])
             pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
-            points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_colors, tracking_id])
+            # points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_traces, tracking_colors, tracking_id])
+            points = np.array(
+                [output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_colors,
+                 tracking_id])
             # points = np.array([output_pose_3d])
 
             if bboxdiff == True:

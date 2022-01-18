@@ -62,6 +62,7 @@ def vis(weights, source, sequence, tracking):
         print(str(resNum))
         if tracking:
             tracking_predictions = result[3]
+            # tracking_traces = result[4]
             tracking_colors = np.array(result[4])/255
             tracking_id = result[5]
             plot_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :],resNum, output_pose_2d, plot_dir, tracking_predictions, tracking_colors, tracking_id)

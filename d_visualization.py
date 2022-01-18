@@ -141,44 +141,53 @@ def plot_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tupl
     fig1 = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
     for n, skeleton in enumerate(skeletons):
+        if len(tracking_predictions) >=1:
+            color = tracking_colors[n]
+            ax.scatter3D(tracking_predictions[n][0], tracking_predictions[n][2], tracking_predictions[n][1],
+                         color=color, marker='^', s=50)
+            ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, tracking_id[n], color=color)
+        else:
+            color = skeleton[:,2]
         chains = get_chains(skeleton, *chains_ixs)
-        subplot_nodes(skeleton, ax,tracking_colors[n])
+        subplot_nodes(skeleton, ax,color)
         subplot_bones(chains, ax)
-        ax.scatter3D(tracking_predictions[n][0][0], tracking_predictions[n][0][1], tracking_predictions[n][0][2], c=tracking_colors[n], s = 20)
-        ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, tracking_id[n], color=tracking_colors[n])
-    ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
-    # ax.view_init(10, 240)
-    # ax.dist = 8
-    #
-    # ax.set_xlabel('x')
-    # ax.set_ylabel('z')
-    # ax.set_zlabel('y')
-    #
-    # # mng = plt.get_current_fig_manager()
-    # # mng.window.state('zoomed')
-    #
-    # plt.show()
-    if resNum <= 360:
-        angle = resNum
-    elif resNum <= 720:
-        angle = resNum - 360
-    else:
-        angle = resNum - 720
 
-    ax.view_init(10, -angle)
+        # for k in range(len(tracking_traces)):
+        #     ax.scatter3D(tracking_traces[k][0][0], tracking_traces[k][0][1], tracking_traces[k][0][2],
+        #                  c=tracking_colors[n], s=10)
+    ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
+    ax.view_init(10, 240)
     ax.dist = 8
 
     ax.set_xlabel('x')
     ax.set_ylabel('z')
     ax.set_zlabel('y')
 
-    ax = fig1.add_subplot(3, 3, 9)
-    ax = plt.imshow(pose2D[:, :, ::-1])
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
 
-    plt.savefig(f"{plot_dir}/{resNum:05}.png")
-    plt.clf()
+    plt.show()
+    # if resNum <= 360:
+    #     angle = resNum
+    # elif resNum <= 720:
+    #     angle = resNum - 360
+    # else:
+    #     angle = resNum - 720
+    #
+    # ax.view_init(10, -angle)
+    # ax.dist = 8
+    #
+    # ax.set_xlabel('x')
+    # ax.set_ylabel('z')
+    # ax.set_zlabel('y')
+    #
+    # ax = fig1.add_subplot(3, 3, 9)
+    # ax = plt.imshow(pose2D[:, :, ::-1])
+    # mng = plt.get_current_fig_manager()
+    # mng.window.state('zoomed')
+    #
+    # plt.savefig(f"{plot_dir}/{resNum:05}.png")
+    # plt.clf()
 
 # save the result with a constant rotation of the scene
 def save_result_rot(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
