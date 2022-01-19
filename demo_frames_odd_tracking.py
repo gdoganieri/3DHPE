@@ -30,41 +30,8 @@ import torchvision
 
 from pathlib import Path
 from posenet.common.utils.vis import vis_keypoints, vis_keypoints_track
-from d_visualization import depthmap2pointcloud, pixel2world
-
-def root_track(skeletons, frame, tracker, root_pt):
-
-    if (len(skeletons)>0):
-        tracker.update(skeletons, root_pt)
-        for i in range(len(tracker.tracks)):
-            color = tracker.tracks[i].track_color
-            if len(tracker.tracks[i].trace) > 1:
-                x = int(tracker.tracks[i].trace[-1][0, 0])
-                y = int(tracker.tracks[i].trace[-1][0, 1])
-                for k in range(len(tracker.tracks[i].trace)):
-                    x = int(tracker.tracks[i].trace[k][0, 0])
-                    y = int(tracker.tracks[i].trace[k][0, 1])
-                    cv2.circle(frame, (x, y), 3, color, -1)
-                cv2.circle(frame, (x, y), 5, color, -1)
-            # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
-    return tracker
-def skeleton_track(skeletons, frame, tracker, bboxes):
-
-    if (len(skeletons)>0):
-        tracker.update(skeletons)
-        for i in range(len(tracker.tracks)):
-            color = tracker.tracks[i].track_color
-            if len(tracker.tracks[i].trace) > 1:
-                x = int(tracker.tracks[i].trace[-1][0, 0])
-                y = int(tracker.tracks[i].trace[-1][0, 1])
-                for k in range(len(tracker.tracks[i].trace)):
-                    x = int(tracker.tracks[i].trace[k][0, 0])
-                    y = int(tracker.tracks[i].trace[k][0, 1])
-                    cv2.circle(frame, (x, y), 3, color, -1)
-                cv2.circle(frame, (x, y), 5, color, -1)
-            # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
-    return tracker
-
+from d_visualization import depthmap2pointcloud, pixel2world, vis_skeletons_track
+from tracking.tracker import skeleton_track
 def main():
     # FASTER RCNN v3 320 fpn
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -83,7 +50,12 @@ def main():
         parser.add_argument('--weights', type=str, dest='weights')
         parser.add_argument('--source', type=str, dest='source')
         parser.add_argument('--sequence', type=str, dest='sequence')
-        parser.add_argument('--bboxdiff', type=bool, dest='bboxdiff')
+        parser.add_argument('--tracking', dest='tracking', action='store_true')
+        parser.add_argument('--no-tracking', dest='tracking', action='store_false')
+        parser.set_defaults(tracking=True)
+        parser.add_argument('--bboxdiff', dest='bboxdiff', action='store_true')
+        parser.add_argument('--no-bboxdiff', dest='bboxdiff', action='store_false')
+        parser.set_defaults(bboxdiff=False)
         args = parser.parse_args()
 
         # test gpus
@@ -104,11 +76,16 @@ def main():
     # argument parsing
     args = parse_args()
 
+    sequence = args.sequence
+    source = args.source
+    bboxdiff = args.bboxdiff
+    track = args.tracking
+    weights = args.weights
+
     posenet_cfg.set_args(args.gpu_ids)
     cudnn.benchmark = True
 
-    # Check the weights to load to find how to build the skeleton
-    weights = args.weights
+    # Check the weights to load and to find how to build the skeleton
     if weights == "MuCo":
         # MuCo joint set
         joint_num = 21
@@ -161,10 +138,6 @@ def main():
     posenet_transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(mean=posenet_cfg.pixel_mean, std=posenet_cfg.pixel_std)])
 
-    sequence = args.sequence
-    source = args.source
-    bboxdiff = args.bboxdiff
-
     # path management
     if source == "pico":
         data_dir = Path("data/pico/")
@@ -187,6 +160,7 @@ def main():
     # focal_rgb = [678, 678]
     # princpt_rgb = [318, 228]
 
+    # tracking init
     tracker = Tracker(1000, 30, 5)
 
     # iterate on the frames
@@ -285,13 +259,14 @@ def main():
             # tracking
             vis_img = original_img.copy()
 
-            tracker = root_track(outpose_tracking, vis_img, tracker, root_pt)
-            # tracker = skeleton_track(outpose_tracking, vis_img, tracker, bbox_list_copy)
+            tracker = skeleton_track(outpose_tracking, vis_img, tracker, root_pt)
+
+
 
             tracking_predictions = []
             tracking_colors = []
             tracking_id = []
-            tracking_traces = []
+            # tracking_traces = []
             for i in range(len(tracker.tracks)):
                 if len(tracker.tracks[i].trace) > 1:
                     tracking_predictions.append(np.array(pixel2world(int(tracker.tracks[i].trace[-1][0, 0]),
@@ -304,7 +279,6 @@ def main():
                     tracking_id.append(tracker.tracks[i].trackId)
                 # for k in range(len(tracker.tracks[n].trace)):
                 #     tracking_traces.append(pixel2cam(tracker.tracks[n].trace[k], focal_rgb, princpt_rgb))
-
 
             # extract 2d poses
             for n in range(person_num):
@@ -344,20 +318,24 @@ def main():
             else:
                 depth = np.zeros([original_img_width,original_img_height])
             pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
+
             # points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_traces, tracking_colors, tracking_id])
             points = np.array(
                 [output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_colors,
                  tracking_id])
             # points = np.array([output_pose_3d])
 
-            if bboxdiff == True:
+            if bboxdiff:
                 output_dir = Path(f"results/{source}/{sequence}_{weights}_20")
                 output_dir.mkdir(parents=True, exist_ok=True)
-                np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
-            else:
+            elif track:
                 output_dir = Path(f"results/tracking/{source}/{sequence}_{weights}")
                 output_dir.mkdir(parents=True, exist_ok=True)
-                np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+            else:
+                output_dir = Path(f"results/{source}/{sequence}_{weights}")
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+            np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
         continue
 
 if __name__ == "__main__":

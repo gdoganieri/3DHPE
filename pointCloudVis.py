@@ -5,7 +5,8 @@ import os
 import json
 from pathlib import Path
 from posenet.common.utils.vis import vis_3d_multiple_skeleton_and_pointcloud
-from d_visualization import plot_skeletons, save_result_rot, save_skeletons_different_bboxset, plot_skeletons_track
+from d_visualization import vis_skeletons, vis_skeletons_different_bboxset, vis_skeletons_track
+
 
 def rotate_poses(poses_3d, R, t):
     R_inv = np.linalg.inv(R)
@@ -16,6 +17,7 @@ def rotate_poses(poses_3d, R, t):
 
     return poses_3d
 
+
 def rotate_points(points_3D, R, t):
     R_inv = np.linalg.inv(R)
     for point in points_3D:
@@ -25,13 +27,16 @@ def rotate_points(points_3D, R, t):
 
     return points_3D
 
-def vis(weights, source, sequence, tracking):
+
+def vis(weights, source, sequence, tracking, save):
     if weights == "MuCo":
         skeleton = ((0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12),
                     (12, 13), (13, 20), (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
-        chain_ixs = ([18, 7, 6, 5, 1, 2, 3, 4, 17],  # L_Hand, L_Wrist, L_Elbow, L_Shoulder, Thorax, R_Shoulder, R_Elbow, R_Wrist, R_Hand
+        chain_ixs = ([18, 7, 6, 5, 1, 2, 3, 4, 17],
+                     # L_Hand, L_Wrist, L_Elbow, L_Shoulder, Thorax, R_Shoulder, R_Elbow, R_Wrist, R_Hand
                      [14, 15, 1, 16, 0],  # Pelvis, Thorax, Spine, Head, Head_top
-                     [20, 13, 12, 11, 14, 8, 9, 10, 19])  # L_Toe, L_Ankle, L_Knee, L_Hip, Pelvis, R_Hip, R_Knee, R_Ankle, R_Toe
+                     [20, 13, 12, 11, 14, 8, 9, 10,
+                      19])  # L_Toe, L_Ankle, L_Knee, L_Hip, Pelvis, R_Hip, R_Knee, R_Ankle, R_Toe
     elif weights == "H36M":
         skeleton = ((0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
                     (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6))
@@ -42,9 +47,12 @@ def vis(weights, source, sequence, tracking):
         assert "Cannot visualize a correct pose. Not enough information provided."
         return -1
 
-    result_dir = Path(f"results/tracking/{source}/{sequence}_{weights}")
-
-    plot_dir = Path(f"plot/tracking/{source}/{sequence}_{weights}")
+    if tracking:
+        result_dir = Path(f"results/tracking/{source}/{sequence}_{weights}")
+        plot_dir = Path(f"plot/tracking/{source}/{sequence}_{weights}")
+    else:
+        result_dir = Path(f"results/{source}/{sequence}_{weights}")
+        plot_dir = Path(f"plot/{source}/{sequence}_{weights}")
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     for resNum, filepath in enumerate(result_dir.iterdir()):
@@ -56,32 +64,30 @@ def vis(weights, source, sequence, tracking):
         output_pose_2d = result[2]
         cv2.namedWindow("2DPose", cv2.WINDOW_NORMAL)
         cv2.imshow("2DPose", output_pose_2d)
+
         # output_pose_3d = rotate_poses(output_pose_3d, R, t)
 
-        # save_result_rot(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir)
         print(str(resNum))
         if tracking:
             tracking_predictions = result[3]
             # tracking_traces = result[4]
-            tracking_colors = np.array(result[4])/255
+            tracking_colors = np.array(result[4]) / 255
             tracking_id = result[5]
-            plot_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :],resNum, output_pose_2d, plot_dir, tracking_predictions, tracking_colors, tracking_id)
+            vis_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir,
+                                     tracking_predictions, tracking_colors, tracking_id, save)
         else:
-            plot_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :])
+            vis_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir, save)
 
 
-#
-# vis_kps = np.array(output_pose_3d)
-# vis_3d_multiple_skeleton_and_pointcloud(vis_kps, np.ones_like(vis_kps), skeleton,
-#                     'output_pose_3d (x,y,z: camera-centered. mm.)', pointcloud[::50, :])
-
-def vis_multi_bboxset(weights, source, sequence):
+def vis_multi_bboxset(weights, source, sequence, save):
     if weights == "MuCo":
         skeleton = ((0, 16), (16, 1), (1, 15), (15, 14), (14, 8), (14, 11), (8, 9), (9, 10), (10, 19), (11, 12),
                     (12, 13), (13, 20), (1, 2), (2, 3), (3, 4), (4, 17), (1, 5), (5, 6), (6, 7), (7, 18))
-        chain_ixs = ([18, 7, 6, 5, 1, 2, 3, 4, 17],  # L_Hand, L_Wrist, L_Elbow, L_Shoulder, Thorax, R_Shoulder, R_Elbow, R_Wrist, R_Hand
+        chain_ixs = ([18, 7, 6, 5, 1, 2, 3, 4, 17],
+                     # L_Hand, L_Wrist, L_Elbow, L_Shoulder, Thorax, R_Shoulder, R_Elbow, R_Wrist, R_Hand
                      [14, 1, 15, 16, 0],  # Pelvis, Thorax, Spine, Head, Head_top
-                     [20, 13, 12, 11, 14, 8, 9, 10, 19])  # L_Toe, L_Ankle, L_Knee, L_Hip, Pelvis, R_Hip, R_Knee, R_Ankle, R_Toe
+                     [20, 13, 12, 11, 14, 8, 9, 10,
+                      19])  # L_Toe, L_Ankle, L_Knee, L_Hip, Pelvis, R_Hip, R_Knee, R_Ankle, R_Toe
     elif weights == "H36M":
         skeleton = ((0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
                     (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6))
@@ -119,9 +125,7 @@ def vis_multi_bboxset(weights, source, sequence):
     for n, filepath_2600 in enumerate(result_dir_2600.iterdir()):
         output_pose_3d[4][n] = np.load(str(filepath_2600), allow_pickle=True)[0]
 
-
-
-    save_skeletons_different_bboxset(output_pose_3d, chain_ixs, pointcloud, output_pose_2d, plot_dir)
+    vis_skeletons_different_bboxset(output_pose_3d, chain_ixs, pointcloud, output_pose_2d, plot_dir, save)
 
 def main():
     def parse_args():
@@ -129,7 +133,15 @@ def main():
         parser.add_argument('--weights', type=str, dest='weights')
         parser.add_argument('--source', type=str, dest='source')
         parser.add_argument('--sequence', type=str, dest='sequence')
-        parser.add_argument('--tracking', type=bool, dest='tracking', default=False)
+        parser.add_argument('--tracking', dest='tracking', action='store_true')
+        parser.add_argument('--no-tracking', dest='tracking', action='store_false')
+        parser.set_defaults(tracking=True)
+        parser.add_argument('--bboxdiff', dest='bboxdiff', action='store_true')
+        parser.add_argument('--no-bboxdiff', dest='bboxdiff', action='store_false')
+        parser.set_defaults(bboxdiff=False)
+        parser.add_argument('--save', dest='save', action='store_true')
+        parser.add_argument('--no-save', dest='save', action='store_false')
+        parser.set_defaults(save=False)
         args = parser.parse_args()
 
         assert args.weights, 'Pretrained weights are required.'
@@ -145,7 +157,11 @@ def main():
     # R = np.array(extrinsics['R'], dtype=np.float32)
     # t = np.array(extrinsics['t'], dtype=np.float32)
 
-    vis(args.weights, args.source, args.sequence, args.tracking)
-    # vis_multi_bboxset(args.weights, args.source, args.sequence)
+    if args.bboxdiff:
+        vis_multi_bboxset(args.weights, args.source, args.sequence, args.save)
+    else:
+        vis(args.weights, args.source, args.sequence, args.tracking, args.save)
+
+
 if __name__ == "__main__":
     main()

@@ -3,6 +3,7 @@ from tracking.kalmanFilter import KalmanFilter
 from scipy.optimize import linear_sum_assignment
 from collections import deque
 import random
+import cv2
 
 
 # class Tracks(object):
@@ -179,3 +180,21 @@ class Tracker(object):
                 self.tracks[i].predict(detections[assignment[i]])
 
             self.tracks[i].trace.append(self.tracks[i].prediction)
+
+
+def skeleton_track(skeletons, frame, tracker, root_pt):
+
+    if (len(skeletons)>0):
+        tracker.update(skeletons, root_pt)
+        for i in range(len(tracker.tracks)):
+            color = tracker.tracks[i].track_color
+            if len(tracker.tracks[i].trace) > 1:
+                x = int(tracker.tracks[i].trace[-1][0, 0])
+                y = int(tracker.tracks[i].trace[-1][0, 1])
+                for k in range(len(tracker.tracks[i].trace)):
+                    x = int(tracker.tracks[i].trace[k][0, 0])
+                    y = int(tracker.tracks[i].trace[k][0, 1])
+                    cv2.circle(frame, (x, y), 3, color, -1)
+                cv2.circle(frame, (x, y), 5, color, -1)
+            # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
+    return tracker

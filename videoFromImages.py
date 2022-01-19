@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-source = 'pico'
+source = 'kinect'
 weights = 'MuCo'
-sequence = '002'
+sequence = '004'
 result_dir = Path(f"{source}/{sequence}_{weights}")
 plot_dir = Path(f"plot/tracking/{result_dir}/")
 

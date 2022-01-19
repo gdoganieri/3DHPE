@@ -115,28 +115,47 @@ def subplot_bones(chains: tp.Tuple[np.ndarray, ...], ax):
     return [ax.plot(chain[:, 0], chain[:, 2], -chain[:, 1]) for chain in chains]
 
 
-def plot_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]], pointcloud):
+def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                  pointcloud, resNum, pose2D, plot_dir, save):
 
-    fig1 = plt.figure("Pointcloud + Skeleton")
+    fig = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
     for skeleton in skeletons:
         chains = get_chains(skeleton, *chains_ixs)
         subplot_nodes(skeleton, ax, skeleton[:, 2])
         subplot_bones(chains, ax)
     ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
-    ax.view_init(10, 240)
-    ax.dist = 8
 
     ax.set_xlabel('x')
     ax.set_ylabel('z')
     ax.set_zlabel('y')
+    ax.dist = 8
 
-    # mng = plt.get_current_fig_manager()
-    # mng.window.state('zoomed')
+    mng = plt.get_current_fig_manager()
+    mng.window.state('zoomed')
+    if save:
+        if resNum <= 360:
+            angle = resNum
+        elif resNum <= 720:
+            angle = resNum - 360
+        else:
+            angle = resNum - 720
 
-    plt.show()
+        ax.view_init(10, -angle)
+        ax = fig.add_subplot(3, 3, 9)
+        ax = plt.imshow(pose2D[:, :, ::-1])
+        mng = plt.get_current_fig_manager()
+        mng.window.state('zoomed')
 
-def plot_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]], pointcloud, resNum, pose2D, plot_dir, tracking_predictions, tracking_colors, tracking_id):
+        plt.savefig(f"{plot_dir}/{resNum:05}.png")
+        plt.clf()
+
+    else:
+        ax.view_init(10, 240)
+        plt.show()
+
+def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                        pointcloud, resNum, pose2D, plot_dir, tracking_predictions, tracking_colors, tracking_id, save):
 
     fig1 = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
@@ -156,82 +175,38 @@ def plot_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tupl
         #     ax.scatter3D(tracking_traces[k][0][0], tracking_traces[k][0][1], tracking_traces[k][0][2],
         #                  c=tracking_colors[n], s=10)
     ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
-    ax.view_init(10, 240)
-    ax.dist = 8
 
+    ax.dist = 8
     ax.set_xlabel('x')
     ax.set_ylabel('z')
-    ax.set_zlabel('y')
-
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
+    if save:
+        if resNum <= 360:
+            angle = resNum
+        elif resNum <= 720:
+            angle = resNum - 360
+        else:
+            angle = resNum - 720
 
-    plt.show()
-    # if resNum <= 360:
-    #     angle = resNum
-    # elif resNum <= 720:
-    #     angle = resNum - 360
-    # else:
-    #     angle = resNum - 720
-    #
-    # ax.view_init(10, -angle)
-    # ax.dist = 8
-    #
-    # ax.set_xlabel('x')
-    # ax.set_ylabel('z')
-    # ax.set_zlabel('y')
-    #
-    # ax = fig1.add_subplot(3, 3, 9)
-    # ax = plt.imshow(pose2D[:, :, ::-1])
-    # mng = plt.get_current_fig_manager()
-    # mng.window.state('zoomed')
-    #
-    # plt.savefig(f"{plot_dir}/{resNum:05}.png")
-    # plt.clf()
+        ax.view_init(10, -angle)
+        ax.set_zlabel('y')
+        ax = fig1.add_subplot(3, 3, 9)
+        ax = plt.imshow(pose2D[:, :, ::-1])
+        plt.savefig(f"{plot_dir}/{resNum:05}.png")
+        plt.clf()
 
-# save the result with a constant rotation of the scene
-def save_result_rot(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
-                   pointcloud, resNum, pose2D, plot_dir):
-    fig = plt.figure("Pointcloud + Skeleton")
-    # ax = fig.add_subplot(1, 1, 1, projection='3d')
-    ax = plt.axes(projection="3d")
-    for skeleton in skeletons:
-        chains = get_chains(skeleton, *chains_ixs)
-        subplot_nodes(skeleton, ax, skeleton[:,2])
-        subplot_bones(chains, ax)
-    ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
-    if resNum <= 360:
-        angle = resNum
-    elif resNum <= 720:
-        angle = resNum - 360
     else:
-        angle = resNum - 720
-
-    ax.view_init(10, -angle)
-    ax.dist = 8
-
-    ax.set_xlabel('x')
-    ax.set_ylabel('z')
-    ax.set_zlabel('y')
-
-    ax = fig.add_subplot(3, 3, 9)
-    ax = plt.imshow(pose2D[:, :, ::-1])
-    mng = plt.get_current_fig_manager()
-    mng.window.state('zoomed')
-
-    plt.savefig(f"{plot_dir}/{resNum:05}.png")
-    plt.clf()
-    # plt.show()
+        ax.view_init(10, 240)
+        plt.show()
 
 # save the result with a constant rotation of the scene
-def save_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Sequence[np.ndarray]]], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
-                   pointcloud, pose2D, plot_dir):
+def vis_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Sequence[np.ndarray]]], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                   pointcloud, pose2D, plot_dir, save):
     fig = plt.figure("Pointcloud + Skeleton")
     colors = ['r', 'g', 'b', 'y', 'c']
     labels = ['2000', '2150', '2300', '2450', '2600']
     # ax = fig.add_subplot(1, 1, 1, projection='3d')
-
-
     for nFrames, skeletons_20 in enumerate(output_pose_3d[0].values()):
         ax = plt.axes(projection="3d")
         skeletons_2150 = output_pose_3d[1][nFrames]
@@ -266,8 +241,6 @@ def save_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Seq
             subplot_bones(chains, ax)
             ax.text(skeleton[10, 0], skeleton[10, 2], -skeleton[10, 1] + 250, labels[4], color=colors[4])
 
-
-
         if nFrames <= 360:
             angle = nFrames
         elif nFrames <= 720:
@@ -285,25 +258,10 @@ def save_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Seq
         plt.imshow(pose2D[nFrames][:, :, ::-1])
         mng = plt.get_current_fig_manager()
         mng.window.state('zoomed')
+        if save:
+            plt.savefig(f"{plot_dir}/{nFrames:05}.png")
+            plt.clf()
 
-        plt.savefig(f"{plot_dir}/{nFrames:05}.png")
-        plt.clf()
-        # plt.show()
-        # plt.clf()
-
-# if __name__ == "__main__":
-#     intrinsic = [
-#                  [fx, 0, cx],
-#                  [0, fy, cy],
-#                  [0, 0,   1]
-#                 ]
-#
-#     pointcloud = depthmap2pointcloud(depth, fx=fx, fy=fy, cx=cx, cy=cy)  # depth in meters
-#
-#
-#     # change these values wrt number and type of joints
-#     chains_ixs = ([0, 1, 2, 3, 4], # hand_l, elbow_l, chest, elbow_r, hand_r
-#                   [5, 2, 6], # pelvis, chest, head
-#                   [7, 8, 5, 9, 10]) # foot_l, knee_l, pelvis, knee_r, foot_r
-#
-#     plot_skeletons(joints, chains_ixs, pointcloud[::30, :])
+        else:
+            plt.show()
+            plt.clf()
