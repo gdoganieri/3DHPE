@@ -111,8 +111,8 @@ def subplot_nodes(dots: np.ndarray, ax, c):
     return ax.scatter3D(dots[:, 0], dots[:, 2], -dots[:, 1], c=c)
 
 
-def subplot_bones(chains: tp.Tuple[np.ndarray, ...], ax):
-    return [ax.plot(chain[:, 0], chain[:, 2], -chain[:, 1]) for chain in chains]
+def subplot_bones(chains: tp.Tuple[np.ndarray, ...], ax, c):
+    return [ax.plot(chain[:, 0], chain[:, 2], -chain[:, 1], color=c) for chain in chains]
 
 
 def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
@@ -123,7 +123,7 @@ def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.Li
     for skeleton in skeletons:
         chains = get_chains(skeleton, *chains_ixs)
         subplot_nodes(skeleton, ax, skeleton[:, 2])
-        subplot_bones(chains, ax)
+        subplot_bones(chains, ax, skeleton[:, 2])
     ax.scatter3D(pointcloud[:, 0], pointcloud[:, 2], pointcloud[:, 1], s=2)
 
     ax.set_xlabel('x')
@@ -131,8 +131,8 @@ def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.Li
     ax.set_zlabel('y')
     ax.dist = 8
 
-    mng = plt.get_current_fig_manager()
-    mng.window.state('zoomed')
+    # mng = plt.get_current_fig_manager()
+    # mng.window.state('zoomed')
     if save:
         if resNum <= 360:
             angle = resNum
@@ -163,13 +163,13 @@ def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple
         if len(tracking_predictions) >=1:
             color = tracking_colors[n]
             ax.scatter3D(tracking_predictions[n][0], tracking_predictions[n][2], tracking_predictions[n][1],
-                         color=color, marker='^', s=50)
+                         color='g', marker='^', s=50)
             ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, tracking_id[n], color=color)
         else:
             color = skeleton[:,2]
         chains = get_chains(skeleton, *chains_ixs)
         subplot_nodes(skeleton, ax,color)
-        subplot_bones(chains, ax)
+        subplot_bones(chains, ax, color)
 
         # for k in range(len(tracking_traces)):
         #     ax.scatter3D(tracking_traces[k][0][0], tracking_traces[k][0][1], tracking_traces[k][0][2],
@@ -179,8 +179,8 @@ def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple
     ax.dist = 8
     ax.set_xlabel('x')
     ax.set_ylabel('z')
-    mng = plt.get_current_fig_manager()
-    mng.window.state('zoomed')
+    # mng = plt.get_current_fig_manager()
+    # mng.window.state('zoomed')
     if save:
         if resNum <= 360:
             angle = resNum

@@ -16,7 +16,7 @@ posenet_path = os.getcwd() + "/posenet"
 from posenet.main.config import cfg as posenet_cfg
 from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
-from posenet.common.utils.pose_utils import process_bbox, pixel2cam
+from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam
 
 rootnet_path = os.getcwd() + "/rootnet"
 
@@ -28,7 +28,7 @@ from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_
 import torchvision
 
 from pathlib import Path
-from posenet.common.utils.vis import vis_keypoints
+from posenet.common.posenet_utils.vis import vis_keypoints
 from d_visualization import depthmap2pointcloud
 
 def main():

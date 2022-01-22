@@ -4,7 +4,7 @@ import numpy as np
 import os
 import json
 from pathlib import Path
-from posenet.common.utils.vis import vis_3d_multiple_skeleton_and_pointcloud
+from posenet.common.posenet_utils.vis import vis_3d_multiple_skeleton_and_pointcloud
 from d_visualization import vis_skeletons, vis_skeletons_different_bboxset, vis_skeletons_track
 
 
@@ -68,10 +68,10 @@ def vis(weights, source, sequence, tracking, save):
         # output_pose_3d = rotate_poses(output_pose_3d, R, t)
 
         print(str(resNum))
-        if tracking:
+        if tracking and len(output_pose_3d)>0:
             tracking_predictions = result[3]
             # tracking_traces = result[4]
-            tracking_colors = np.array(result[4]) / 255
+            tracking_colors = np.array(result[4],dtype=np.float32)[:,::-1] / 255
             tracking_id = result[5]
             vis_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir,
                                      tracking_predictions, tracking_colors, tracking_id, save)

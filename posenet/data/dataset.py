@@ -6,8 +6,8 @@ import torch
 import copy
 import math
 from torch.utils.data.dataset import Dataset
-from utils.vis import vis_keypoints, vis_3d_skeleton
-from utils.pose_utils import fliplr_joints, transform_joint_to_other_db
+from posenet_utils.vis import vis_keypoints, vis_3d_skeleton
+from posenet_utils.pose_utils import fliplr_joints, transform_joint_to_other_db
 from posenet.main.config import cfg
 
 class DatasetLoader(Dataset):

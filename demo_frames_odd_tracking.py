@@ -17,33 +17,26 @@ posenet_path = os.getcwd() + "/posenet"
 from posenet.main.config import cfg as posenet_cfg
 from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
-from posenet.common.utils.pose_utils import process_bbox, pixel2cam, cam2pixel
+from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam, cam2pixel
 
 rootnet_path = os.getcwd() + "/rootnet"
 
 from rootnet.main.config import cfg as rootnet_cfg
 from rootnet.main.model import get_pose_net as get_root_net
-from rootnet.common.utils.pose_utils import process_bbox as rootnet_process_bbox
+from rootnet.common.rootnet_utils.pose_utils import process_bbox as rootnet_process_bbox
 from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_image
 
 import torchvision
 
 from pathlib import Path
-from posenet.common.utils.vis import vis_keypoints, vis_keypoints_track
+from posenet.common.posenet_utils.vis import vis_keypoints, vis_keypoints_track
 from d_visualization import depthmap2pointcloud, pixel2world, vis_skeletons_track
+
+
 from tracking.tracker import skeleton_track
+from yolox.tracker.byte_tracker import BYTETracker
+
 def main():
-    # FASTER RCNN v3 320 fpn
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    detector_model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True,
-                                                                                        pretrained_backbone=True)
-    detector_model.eval().to(device)
-
-    detector_score_threshold = 0.8
-    detector_transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
-
     def parse_args():
         parser = argparse.ArgumentParser()
         parser.add_argument('--gpu', type=str, dest='gpu_ids')
@@ -56,6 +49,23 @@ def main():
         parser.add_argument('--bboxdiff', dest='bboxdiff', action='store_true')
         parser.add_argument('--no-bboxdiff', dest='bboxdiff', action='store_false')
         parser.set_defaults(bboxdiff=False)
+        parser.add_argument('--yolo', dest='yolo', action='store_true')
+        parser.add_argument('--no-yolo', dest='yolo', action='store_false')
+        parser.set_defaults(tracking=False)
+        parser.add_argument('--byteTrack', dest='byteTrack', action='store_true')
+        parser.add_argument('--no-byteTrack', dest='byteTrack', action='store_false')
+        parser.set_defaults(tracking=True)
+        #tracking argument byteTrack
+        parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
+        parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
+        parser.add_argument("--match_thresh", type=float, default=0.8, help="matching threshold for tracking")
+        parser.add_argument(
+            "--aspect_ratio_thresh", type=float, default=1.6,
+            help="threshold for filtering out boxes of which aspect ratio are above the given value."
+        )
+        parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
+        parser.add_argument("--mot20", dest="mot20", default=False, action="store_true", help="test mot20.")
+
         args = parser.parse_args()
 
         # test gpus
@@ -81,6 +91,26 @@ def main():
     bboxdiff = args.bboxdiff
     track = args.tracking
     weights = args.weights
+    use_yolo = args.yolo
+    use_byteTrack = args.byteTrack
+
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    if use_yolo:
+        # Model
+        detector_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+        detector_model.eval().to(device)
+        detector_model.classes = [0]  # filter for specific classes
+
+    else:
+        # FASTER RCNN v3 320 fpn
+        detector_model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True,
+                                                                                            pretrained_backbone=True)
+        detector_model.eval().to(device)
+
+    detector_score_threshold = 0.8
+    detector_transform = transforms.Compose([
+        transforms.ToTensor(),
+    ])
 
     posenet_cfg.set_args(args.gpu_ids)
     cudnn.benchmark = True
@@ -161,11 +191,14 @@ def main():
     # princpt_rgb = [318, 228]
 
     # tracking init
-    tracker = Tracker(1000, 30, 5)
+    if use_byteTrack:
+        tracker = BYTETracker(args)
+    else:
+        tracker = Tracker(500, 10, 5)
 
     # iterate on the frames
     for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
-        if nFrame%2 == 0 and nFrame > 175:
+        if nFrame%2 == 0 and nFrame > 50:
             original_img = cv2.imread(str(rgb_data_dir/filename.name))
             if original_img is None:
                 print("Loading image failed.")
@@ -176,18 +209,25 @@ def main():
 
             # get bboxes
             boxes_time = time.time()
-
-            # FASTER RCNN
             model_input = detector_transform(original_img).unsqueeze(0).to(device)
-            outputs = detector_model(model_input)
-            labels = outputs[0]['labels'].cpu().detach().numpy()
-            # print(labels)
-            pred_scores = outputs[0]['scores'].cpu().detach().numpy()
-            pred_bboxes = outputs[0]['boxes'].cpu().detach().numpy()
+            if use_yolo:
+                # YOLO
+                model_output = detector_model(original_img)
+                results = model_output.pandas().xyxy[0]
+                pred_classes = results["name"]
+                labels = results["class"]
+                bbox_list = model_output.xyxy[0].cpu().numpy()[:, :4].astype(np.int32)
+            else:
+                # FASTER RCNN
+                outputs = detector_model(model_input)
+                labels = outputs[0]['labels'].cpu().detach().numpy()
+                # print(labels)
+                pred_scores = outputs[0]['scores'].cpu().detach().numpy()
+                pred_bboxes = outputs[0]['boxes'].cpu().detach().numpy()
 
-            bbox_list = pred_bboxes[pred_scores >= detector_score_threshold]
-            labels = labels[pred_scores >= detector_score_threshold]
-            bbox_list = bbox_list[labels == 1]
+                bbox_list = pred_bboxes[pred_scores >= detector_score_threshold]
+                labels = labels[pred_scores >= detector_score_threshold]
+                bbox_list = bbox_list[labels == 1]
             bbox_list_copy = bbox_list.copy()
 
             pose_time = time.time()
@@ -259,14 +299,16 @@ def main():
             # tracking
             vis_img = original_img.copy()
 
-            tracker = skeleton_track(outpose_tracking, vis_img, tracker, root_pt)
-
-
+            if use_byteTrack:
+                online_target = tracker.update(bbox_list_copy, [original_img_height, original_img_width], (800, 1440))
+            else:
+                tracker = skeleton_track(outpose_tracking, vis_img, tracker, root_pt, bbox_list_copy)
 
             tracking_predictions = []
             tracking_colors = []
             tracking_id = []
-            # tracking_traces = []
+            tracking_skeletons = []
+            tracking_bboxes = []
             for i in range(len(tracker.tracks)):
                 if len(tracker.tracks[i].trace) > 1:
                     tracking_predictions.append(np.array(pixel2world(int(tracker.tracks[i].trace[-1][0, 0]),
@@ -277,6 +319,10 @@ def main():
                                                             princpt_rgb[0], princpt_rgb[1])))
                     tracking_colors.append(tracker.tracks[i].track_color)
                     tracking_id.append(tracker.tracks[i].trackId)
+                    current_skeleton = tracker.tracks[i].track_skeleton.copy()
+                    current_skeleton = pixel2cam(current_skeleton, focal_rgb, princpt_rgb)
+                    tracking_skeletons.append(current_skeleton)
+                    tracking_bboxes.append(tracker.tracks[i].track_bbox)
                 # for k in range(len(tracker.tracks[n].trace)):
                 #     tracking_traces.append(pixel2cam(tracker.tracks[n].trace[k], focal_rgb, princpt_rgb))
 
@@ -290,12 +336,12 @@ def main():
                 vis_kps[2, :] = 1
                 img_2d = vis_keypoints_track(vis_img, vis_kps, skeleton, tracker.tracks[n].track_color)
                 img_2d = cv2.rectangle(img_2d,
-                                       (int(bbox_list_copy[n][0]), int(bbox_list_copy[n][1])),
-                                       (int(bbox_list_copy[n][2]), int(bbox_list_copy[n][3])),
+                                       (int(tracker.tracks[n].track_bbox[0]), int(tracker.tracks[n].track_bbox[1])),
+                                       (int(tracker.tracks[n].track_bbox[2]), int(tracker.tracks[n].track_bbox[3])),
                                        tracker.tracks[n].track_color, thickness=1)
 
                 cv2.putText(img_2d, str(tracker.tracks[n].trackId),
-                            (int(bbox_list_copy[n][0]), int(bbox_list_copy[n][1])-10), 0, 0.5,
+                            (int(tracker.tracks[n].track_bbox[0]), int(tracker.tracks[n].track_bbox[1])-10), 0, 0.5,
                             tracker.tracks[n].track_color, 2)
                 vis_img = img_2d
 
@@ -321,7 +367,7 @@ def main():
 
             # points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_traces, tracking_colors, tracking_id])
             points = np.array(
-                [output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_colors,
+                [tracking_skeletons, pointcloud, vis_img, tracking_predictions, tracking_colors,
                  tracking_id])
             # points = np.array([output_pose_3d])
 

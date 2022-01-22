@@ -16,7 +16,7 @@ posenet_path = os.getcwd() + "/posenet"
 from posenet.main.config import cfg as posenet_cfg
 from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
-from posenet.common.utils.pose_utils import process_bbox, pixel2cam
+from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam
 
 rootnet_path = os.getcwd() + "/rootnet"
 
@@ -28,7 +28,7 @@ from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_
 import torchvision
 
 from pathlib import Path
-from posenet.common.utils.vis import vis_keypoints
+from posenet.common.posenet_utils.vis import vis_keypoints
 from d_visualization import depthmap2pointcloud
 
 def main():
@@ -39,9 +39,7 @@ def main():
     detector_model.eval().to(device)
 
     detector_score_threshold = 0.8
-    detector_transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
+    detector_transform = transforms.Compose([transforms.ToTensor(),])
 
     def parse_args():
         parser = argparse.ArgumentParser()
@@ -49,6 +47,7 @@ def main():
         parser.add_argument('--weights', type=str, dest='weights')
         parser.add_argument('--source', type=str, dest='source')
         parser.add_argument('--sequence', type=str, dest='sequence')
+        parser.add_argument('--bboxdiff', type=bool, dest='bboxdiff')
         args = parser.parse_args()
 
         # test gpus
@@ -127,6 +126,8 @@ def main():
 
     sequence = args.sequence
     source = args.source
+    bboxdiff = args.bboxdiff
+
     if source == "pico":
         data_dir = Path("data/pico/")
         rgb_data_dir = data_dir / "rgb" / sequence
@@ -191,8 +192,9 @@ def main():
             img, img2bb_trans = rootnet_generate_patch_image(original_img, bbox, False, 0.0)
             img = rootnet_transform(img).cpu()[None, :, :, :]
 
-            k_value = np.array([math.sqrt(bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] /
-                                          ( bbox[2] * bbox[3]))]).astype(np.float32)
+            k_value = np.array([math.sqrt(
+                bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
+                            bbox[2] * bbox[3]))]).astype(np.float32)
             k_value = torch.FloatTensor([k_value]).cpu()[None, :]
 
             # forward
@@ -270,10 +272,17 @@ def main():
             depth = np.zeros([original_img_width,original_img_height])
         pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
         points = np.array([output_pose_3d, pointcloud, vis_img])
+        # points = np.array([output_pose_3d])
 
-        output_dir = Path(f"results/{source}/{sequence}_{weights}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+        if bboxdiff == True:
+            output_dir = Path(f"results/{source}/{sequence}_{weights}_20")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+        else:
+            output_dir = Path(f"results/{source}/{sequence}_{weights}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+        continue
 
 if __name__ == "__main__":
     main()
