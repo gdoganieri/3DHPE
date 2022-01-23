@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 from nets.resnet import ResNetBackbone
+from torch.nn import functional as F
+
 from .config import cfg
+
 
 class HeadNet(nn.Module):
 
@@ -57,19 +59,19 @@ class HeadNet(nn.Module):
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
 
-def soft_argmax(heatmaps, joint_num):
 
-    heatmaps = heatmaps.reshape((-1, joint_num, cfg.depth_dim*cfg.output_shape[0]*cfg.output_shape[1]))
+def soft_argmax(heatmaps, joint_num):
+    heatmaps = heatmaps.reshape((-1, joint_num, cfg.depth_dim * cfg.output_shape[0] * cfg.output_shape[1]))
     heatmaps = F.softmax(heatmaps, 2)
     heatmaps = heatmaps.reshape((-1, joint_num, cfg.depth_dim, cfg.output_shape[0], cfg.output_shape[1]))
 
-    accu_x = heatmaps.sum(dim=(2,3))
-    accu_y = heatmaps.sum(dim=(2,4))
-    accu_z = heatmaps.sum(dim=(3,4))
+    accu_x = heatmaps.sum(dim=(2, 3))
+    accu_y = heatmaps.sum(dim=(2, 4))
+    accu_z = heatmaps.sum(dim=(3, 4))
 
-    accu_x = accu_x * torch.arange(cfg.output_shape[1]).float().cpu()[None,None,:]
-    accu_y = accu_y * torch.arange(cfg.output_shape[0]).float().cpu()[None,None,:]
-    accu_z = accu_z * torch.arange(cfg.depth_dim).float().cpu()[None,None,:]
+    accu_x = accu_x * torch.arange(cfg.output_shape[1]).float().cpu()[None, None, :]
+    accu_y = accu_y * torch.arange(cfg.output_shape[0]).float().cpu()[None, None, :]
+    accu_z = accu_z * torch.arange(cfg.depth_dim).float().cpu()[None, None, :]
 
     accu_x = accu_x.sum(dim=2, keepdim=True)
     accu_y = accu_y.sum(dim=2, keepdim=True)
@@ -78,6 +80,7 @@ def soft_argmax(heatmaps, joint_num):
     coord_out = torch.cat((accu_x, accu_y, accu_z), dim=2)
 
     return coord_out
+
 
 class ResPoseNet(nn.Module):
     def __init__(self, backbone, head, joint_num):
@@ -90,22 +93,22 @@ class ResPoseNet(nn.Module):
         fm = self.backbone(input_img)
         hm = self.head(fm)
         coord = soft_argmax(hm, self.joint_num)
-        
+
         if target is None:
             return coord
         else:
             target_coord = target['coord']
             target_vis = target['vis']
             target_have_depth = target['have_depth']
-            
+
             ## coordinate loss
             loss_coord = torch.abs(coord - target_coord) * target_vis
-            loss_coord = (loss_coord[:,:,0] + loss_coord[:,:,1] + loss_coord[:,:,2] * target_have_depth)/3.
-            
+            loss_coord = (loss_coord[:, :, 0] + loss_coord[:, :, 1] + loss_coord[:, :, 2] * target_have_depth) / 3.
+
             return loss_coord
 
+
 def get_pose_net(cfg, is_train, joint_num):
-    
     backbone = ResNetBackbone(cfg.resnet_type)
     head_net = HeadNet(joint_num)
     if is_train:
@@ -114,4 +117,3 @@ def get_pose_net(cfg, is_train, joint_num):
 
     model = ResPoseNet(backbone, head_net, joint_num)
     return model
-

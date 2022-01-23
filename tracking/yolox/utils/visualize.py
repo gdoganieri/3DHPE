@@ -4,13 +4,13 @@
 
 import cv2
 import numpy as np
+
 from posenet.common.posenet_utils.vis import vis_keypoints_track
 
 __all__ = ["vis"]
 
 
 def vis(img, boxes, scores, cls_ids, conf=0.5, class_names=None):
-
     for i in range(len(boxes)):
         box = boxes[i]
         cls_id = int(cls_ids[i])
@@ -34,7 +34,7 @@ def vis(img, boxes, scores, cls_ids, conf=0.5, class_names=None):
         cv2.rectangle(
             img,
             (x0, y0 + 1),
-            (x0 + txt_size[0] + 1, y0 + int(1.5*txt_size[1])),
+            (x0 + txt_size[0] + 1, y0 + int(1.5 * txt_size[1])),
             txt_bk_color,
             -1
         )
@@ -50,7 +50,8 @@ def get_color(idx):
     return color
 
 
-def plot_tracking(image, tlwhs, obj_ids, skeletons, skeleton_struct, joint_num, scores=None, frame_id=0, fps=0., ids2=None):
+def plot_tracking(image, tlwhs, obj_ids, skeletons, skeleton_struct, joint_num, scores=None, frame_id=0, fps=0.,
+                  ids2=None):
     im = np.ascontiguousarray(np.copy(image))
     im_h, im_w = im.shape[:2]
 
@@ -63,7 +64,7 @@ def plot_tracking(image, tlwhs, obj_ids, skeletons, skeleton_struct, joint_num, 
     # text_thickness = 2
     # line_thickness = 3
 
-    radius = max(5, int(im_w/140.))
+    radius = max(5, int(im_w / 140.))
     cv2.putText(im, 'frame: %d fps: %.2f num: %d' % (frame_id, fps, len(tlwhs)),
                 (0, int(20)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
@@ -83,10 +84,8 @@ def plot_tracking(image, tlwhs, obj_ids, skeletons, skeleton_struct, joint_num, 
         im = vis_keypoints_track(im, vis_kps, skeleton_struct, color)
 
         cv2.rectangle(im, intbox[0:2], intbox[2:4], color=color, thickness=line_thickness)
-        cv2.putText(im, id_text, (intbox[0], intbox[1]-5), cv2.FONT_HERSHEY_PLAIN, text_scale, color,
+        cv2.putText(im, id_text, (intbox[0], intbox[1] - 5), cv2.FONT_HERSHEY_PLAIN, text_scale, color,
                     thickness=text_thickness)
-
-
 
     return im
 

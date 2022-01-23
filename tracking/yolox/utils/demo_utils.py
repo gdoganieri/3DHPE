@@ -2,9 +2,9 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
 
-import numpy as np
-
 import os
+
+import numpy as np
 
 __all__ = ["mkdir", "nms", "multiclass_nms", "demo_postprocess"]
 
@@ -69,7 +69,6 @@ def multiclass_nms(boxes, scores, nms_thr, score_thr):
 
 
 def demo_postprocess(outputs, img_size, p6=False):
-
     grids = []
     expanded_strides = []
 

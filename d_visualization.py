@@ -1,7 +1,7 @@
+import typing as tp
 
 import matplotlib.pyplot as plt
 import numpy as np
-import typing as tp
 
 from tracking.yolox.utils.visualize import get_color
 
@@ -14,6 +14,7 @@ def world2pixel(x, y, z, img_width, img_height, fx, fy, cx=None, cy=None):
     p_x = x * fx / z + cx
     p_y = cy - y * fy / z
     return p_x, p_y
+
 
 def pixel2world(x, y, z, img_width, img_height, fx, fy, cx=None, cy=None):
     """Converts image coordinates to 3D real world coordinates using depth values
@@ -58,11 +59,13 @@ def pixel2world(x, y, z, img_width, img_height, fx, fy, cx=None, cy=None):
     w_z = z
     return w_x, w_y, w_z
 
+
 def points2pixels(points, img_width, img_height, fx, fy, cx=None, cy=None):
     pixels = np.zeros((points.shape[0], 2))
     pixels[:, 0], pixels[:, 1] = \
-        world2pixel(points[:,0], points[:, 1], points[:, 2], img_width, img_height, fx, fy, cx, cy)
+        world2pixel(points[:, 0], points[:, 1], points[:, 2], img_width, img_height, fx, fy, cx, cy)
     return pixels
+
 
 def depthmap2points(image, fx, fy, cx=None, cy=None):
     """Converts image coordinates to 3D real world coordinates using depth values
@@ -104,7 +107,8 @@ def get_chain_dots(dots: np.ndarray, chain_dots_indexes: tp.List[int]) -> np.nda
     return dots[chain_dots_indexes]
 
 
-def get_chains(dots: np.ndarray, arms_chain_ixs: tp.List[int], torso_chain_ixs: tp.List[int], legs_chain_ixs: tp.List[int]):
+def get_chains(dots: np.ndarray, arms_chain_ixs: tp.List[int], torso_chain_ixs: tp.List[int],
+               legs_chain_ixs: tp.List[int]):
     return (get_chain_dots(dots, arms_chain_ixs),
             get_chain_dots(dots, torso_chain_ixs),
             get_chain_dots(dots, legs_chain_ixs))
@@ -120,7 +124,6 @@ def subplot_bones(chains: tp.Tuple[np.ndarray, ...], ax, c):
 
 def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
                   pointcloud, resNum, pose2D, plot_dir, save):
-
     fig = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
     for skeleton in skeletons:
@@ -157,25 +160,26 @@ def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.Li
         ax.view_init(10, 240)
         plt.show()
 
-def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
-                        pointcloud, resNum, pose2D, plot_dir, tracking_ids, save):
 
+def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray],
+                        chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                        pointcloud, resNum, pose2D, plot_dir, tracking_ids, save):
     fig1 = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
     for n, skeleton in enumerate(skeletons):
-        if len(tracking_ids) >=1:
+        if len(tracking_ids) >= 1:
             obj_id = int(tracking_ids[n])
             id_text = '{}'.format(int(obj_id))
             color = get_color(abs(obj_id))
-            color = np.array(color[::-1], dtype=np.float32)/255
+            color = np.array(color[::-1], dtype=np.float32) / 255
             # color = (color[::-1] / 255).dtype=np.float32
             # ax.scatter3D(tracking_predictions[n][0], tracking_predictions[n][2], tracking_predictions[n][1],
             #              color='g', marker='^', s=50)
             ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, id_text, color=color)
         else:
-            color = skeleton[:,2]
+            color = skeleton[:, 2]
         chains = get_chains(skeleton, *chains_ixs)
-        subplot_nodes(skeleton, ax,color)
+        subplot_nodes(skeleton, ax, color)
         subplot_bones(chains, ax, color)
 
         # for k in range(len(tracking_traces)):
@@ -207,9 +211,11 @@ def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple
         ax.view_init(10, 240)
         plt.show()
 
+
 # save the result with a constant rotation of the scene
-def vis_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Sequence[np.ndarray]]], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
-                   pointcloud, pose2D, plot_dir, save):
+def vis_skeletons_different_bboxset(output_pose_3d: tp.List[tp.Dict[int, tp.Sequence[np.ndarray]]],
+                                    chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
+                                    pointcloud, pose2D, plot_dir, save):
     fig = plt.figure("Pointcloud + Skeleton")
     colors = ['r', 'g', 'b', 'y', 'c']
     labels = ['2000', '2150', '2300', '2450', '2600']

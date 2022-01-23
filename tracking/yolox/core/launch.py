@@ -5,18 +5,17 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Copyright (c) Megvii, Inc. and its affiliates.
 
-from loguru import logger
-
-import torch
-import torch.distributed as dist
-
-import tracking.yolox.utils.dist as comm
-from tracking.yolox.utils import configure_nccl
-
 import os
 import subprocess
 import sys
 import time
+
+import torch
+import torch.distributed as dist
+from loguru import logger
+
+import tracking.yolox.utils.dist as comm
+from tracking.yolox.utils import configure_nccl
 
 __all__ = ["launch"]
 
@@ -37,13 +36,13 @@ def _find_free_port():
 
 
 def launch(
-    main_func,
-    num_gpus_per_machine,
-    num_machines=1,
-    machine_rank=0,
-    backend="nccl",
-    dist_url=None,
-    args=(),
+        main_func,
+        num_gpus_per_machine,
+        num_machines=1,
+        machine_rank=0,
+        backend="nccl",
+        dist_url=None,
+        args=(),
 ):
     """
     Args:
@@ -90,16 +89,16 @@ def launch(
 
 
 def launch_by_subprocess(
-    raw_argv,
-    world_size,
-    num_machines,
-    machine_rank,
-    num_gpus_per_machine,
-    dist_url,
-    args,
+        raw_argv,
+        world_size,
+        num_machines,
+        machine_rank,
+        num_gpus_per_machine,
+        dist_url,
+        args,
 ):
     assert (
-        world_size > 1
+            world_size > 1
     ), "subprocess mode doesn't support single GPU, use spawn mode instead"
 
     if dist_url is None:
@@ -112,7 +111,7 @@ def launch_by_subprocess(
             if machine_rank == 0:
                 port = _find_free_port()
                 with open(ip_add_file, "w") as ip_add:
-                    ip_add.write(dist_url+'\n')
+                    ip_add.write(dist_url + '\n')
                     ip_add.write(str(port))
             else:
                 while not os.path.exists(ip_add_file):
@@ -165,15 +164,15 @@ def launch_by_subprocess(
 
 
 def _distributed_worker(
-    local_rank,
-    main_func,
-    world_size,
-    num_gpus_per_machine,
-    num_machines,
-    machine_rank,
-    backend,
-    dist_url,
-    args,
+        local_rank,
+        main_func,
+        world_size,
+        num_gpus_per_machine,
+        num_machines,
+        machine_rank,
+        backend,
+        dist_url,
+        args,
 ):
     assert (
         torch.cuda.is_available()
@@ -196,7 +195,7 @@ def _distributed_worker(
     comm.synchronize()
 
     if global_rank == 0 and os.path.exists(
-        "./" + args[1].experiment_name + "_ip_add.txt"
+            "./" + args[1].experiment_name + "_ip_add.txt"
     ):
         os.remove("./" + args[1].experiment_name + "_ip_add.txt")
 

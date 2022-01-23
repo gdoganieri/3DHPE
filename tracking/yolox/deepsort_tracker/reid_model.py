@@ -1,9 +1,10 @@
+import logging
+
+import cv2
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import cv2
-import logging
 import torchvision.transforms as transforms
 
 
@@ -130,8 +131,9 @@ class Extractor(object):
             3. to torch Tensor
             4. normalize
         """
+
         def _resize(im, size):
-            return cv2.resize(im.astype(np.float32)/255., size)
+            return cv2.resize(im.astype(np.float32) / 255., size)
 
         im_batch = torch.cat([self.norm(_resize(im, self.size)).unsqueeze(
             0) for im in im_crops], dim=0).float()

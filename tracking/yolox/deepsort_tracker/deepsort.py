@@ -1,12 +1,13 @@
-import numpy as np
-import torch
-import cv2
 import os
 
-from .reid_model import Extractor
-from . import linear_assignment, iou_matching, kalman_filter
+import cv2
+import numpy as np
+import torch
+
 from tracking.yolox.data.dataloading import get_yolox_datadir
+from . import linear_assignment, iou_matching, kalman_filter
 from .detection import Detection
+from .reid_model import Extractor
 from .track import Track
 
 
@@ -153,7 +154,8 @@ class NearestNeighborDistanceMetric(object):
 
 
 class DeepSort(object):
-    def __init__(self, model_path, max_dist=0.1, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7, max_age=30, n_init=3, nn_budget=100, use_cuda=True):
+    def __init__(self, model_path, max_dist=0.1, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7,
+                 max_age=30, n_init=3, nn_budget=100, use_cuda=True):
         self.min_confidence = min_confidence
         self.nms_max_overlap = nms_max_overlap
 
@@ -172,7 +174,7 @@ class DeepSort(object):
         # post process detections
         output_results = output_results.cpu().numpy()
         confidences = output_results[:, 4] * output_results[:, 5]
-        
+
         bboxes = output_results[:, :4]  # x1y1x2y2
         img_h, img_w = img_info[0], img_info[1]
         scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
@@ -187,7 +189,7 @@ class DeepSort(object):
         features = self._get_features(bbox_tlwh, ori_img)
         detections = [Detection(bbox_tlwh[i], conf, features[i]) for i, conf in enumerate(
             confidences) if conf > self.min_confidence]
-        classes = np.zeros((len(detections), ))
+        classes = np.zeros((len(detections),))
 
         # run on non-maximum supression
         boxes = np.array([d.tlwh for d in detections])
@@ -216,6 +218,7 @@ class DeepSort(object):
         Convert bbox from xc_yc_w_h to xtl_ytl_w_h
     Thanks JieChen91@github.com for reporting this bug!
     """
+
     @staticmethod
     def _xywh_to_tlwh(bbox_xywh):
         if isinstance(bbox_xywh, np.ndarray):
@@ -225,7 +228,7 @@ class DeepSort(object):
         bbox_tlwh[:, 0] = bbox_xywh[:, 0] - bbox_xywh[:, 2] / 2.
         bbox_tlwh[:, 1] = bbox_xywh[:, 1] - bbox_xywh[:, 3] / 2.
         return bbox_tlwh
-    
+
     @staticmethod
     def _xyxy_to_tlwh_array(bbox_xyxy):
         if isinstance(bbox_xyxy, np.ndarray):
@@ -252,9 +255,9 @@ class DeepSort(object):
         """
         x, y, w, h = bbox_tlwh
         x1 = max(int(x), 0)
-        x2 = min(int(x+w), self.width - 1)
+        x2 = min(int(x + w), self.width - 1)
         y1 = max(int(y), 0)
-        y2 = min(int(y+h), self.height - 1)
+        y2 = min(int(y + h), self.height - 1)
         return x1, y1, x2, y2
 
     def _tlwh_to_xyxy_noclip(self, bbox_tlwh):

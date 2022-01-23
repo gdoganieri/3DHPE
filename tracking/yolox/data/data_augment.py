@@ -9,13 +9,13 @@ The data augmentation procedures were interpreted from @weiliu89's SSD paper
 http://arxiv.org/abs/1512.02325
 """
 
+import math
+import random
+
 import cv2
 import numpy as np
 
 from tracking.yolox.utils import xyxy2cxcywh
-
-import math
-import random
 
 
 def augment_hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
@@ -42,22 +42,22 @@ def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.2):
     w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
     ar = np.maximum(w2 / (h2 + 1e-16), h2 / (w2 + 1e-16))  # aspect ratio
     return (
-        (w2 > wh_thr)
-        & (h2 > wh_thr)
-        & (w2 * h2 / (w1 * h1 + 1e-16) > area_thr)
-        & (ar < ar_thr)
+            (w2 > wh_thr)
+            & (h2 > wh_thr)
+            & (w2 * h2 / (w1 * h1 + 1e-16) > area_thr)
+            & (ar < ar_thr)
     )  # candidates
 
 
 def random_perspective(
-    img,
-    targets=(),
-    degrees=10,
-    translate=0.1,
-    scale=0.1,
-    shear=10,
-    perspective=0.0,
-    border=(0, 0),
+        img,
+        targets=(),
+        degrees=10,
+        translate=0.1,
+        scale=0.1,
+        shear=10,
+        perspective=0.0,
+        border=(0, 0),
 ):
     # targets = [cls, xyxy]
     height = img.shape[0] + border[0] * 2  # shape(h,w,c)
@@ -84,10 +84,10 @@ def random_perspective(
     # Translation
     T = np.eye(3)
     T[0, 2] = (
-        random.uniform(0.5 - translate, 0.5 + translate) * width
+            random.uniform(0.5 - translate, 0.5 + translate) * width
     )  # x translation (pixels)
     T[1, 2] = (
-        random.uniform(0.5 - translate, 0.5 + translate) * height
+            random.uniform(0.5 - translate, 0.5 + translate) * height
     )  # y translation (pixels)
 
     # Combined rotation matrix
@@ -129,19 +129,19 @@ def random_perspective(
         xy = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
 
         # clip boxes
-        #xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
-        #xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
+        # xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
+        # xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
 
         # filter candidates
         i = box_candidates(box1=targets[:, :4].T * s, box2=xy.T)
         targets = targets[i]
         targets[:, :4] = xy[i]
-        
+
         targets = targets[targets[:, 0] < width]
         targets = targets[targets[:, 2] > 0]
         targets = targets[targets[:, 1] < height]
         targets = targets[targets[:, 3] > 0]
-        
+
     return img, targets
 
 
@@ -261,8 +261,8 @@ class TrainTransform:
         targets_t = np.hstack((labels_t, boxes_t, ids_t))
         padded_labels = np.zeros((self.max_labels, 6))
         padded_labels[range(len(targets_t))[: self.max_labels]] = targets_t[
-            : self.max_labels
-        ]
+                                                                  : self.max_labels
+                                                                  ]
         padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
         image_t = np.ascontiguousarray(image_t, dtype=np.float32)
         return image_t, padded_labels

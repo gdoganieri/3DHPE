@@ -1,15 +1,16 @@
-import cv2
+import argparse
 import math
-import time
 import os
 import os.path as osp
+import time
+
+import cv2
 import numpy as np
 import torch
-import argparse
-import torchvision.transforms as transforms
-from torch.nn.parallel.data_parallel import DataParallel
 import torch.backends.cudnn as cudnn
+import torchvision.transforms as transforms
 from thefuzz import process
+from torch.nn.parallel.data_parallel import DataParallel
 
 posenet_path = os.getcwd() + "/posenet"
 
@@ -22,7 +23,7 @@ rootnet_path = os.getcwd() + "/rootnet"
 
 from rootnet.main.config import cfg as rootnet_cfg
 from rootnet.main.model import get_pose_net as get_root_net
-from rootnet.common.utils.pose_utils import process_bbox as rootnet_process_bbox
+from rootnet.common.rootnet_utils.pose_utils import process_bbox as rootnet_process_bbox
 from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_image
 
 import torchvision
@@ -30,6 +31,7 @@ import torchvision
 from pathlib import Path
 from posenet.common.posenet_utils.vis import vis_keypoints
 from d_visualization import depthmap2pointcloud
+
 
 def main():
     # FASTER RCNN v3 320 fpn
@@ -39,7 +41,7 @@ def main():
     detector_model.eval().to(device)
 
     detector_score_threshold = 0.8
-    detector_transform = transforms.Compose([transforms.ToTensor(),])
+    detector_transform = transforms.Compose([transforms.ToTensor(), ])
 
     def parse_args():
         parser = argparse.ArgumentParser()
@@ -91,9 +93,9 @@ def main():
         joint_num = 18
         joints_name = ('Pelvis', 'R_Hip', 'R_Knee', 'R_Ankle', 'L_Hip', 'L_Knee', 'L_Ankle', 'Torso', 'Neck', 'Nose',
                        'Head', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'Thorax')
-        flip_pairs = ( (1, 4), (2, 5), (3, 6), (14, 11), (15, 12), (16, 13) )
-        skeleton = ( (0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
-                     (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6) )
+        flip_pairs = ((1, 4), (2, 5), (3, 6), (14, 11), (15, 12), (16, 13))
+        skeleton = ((0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
+                    (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6))
         model_path_posenet = 'snapshot_24_H36M+MPII.pth.tar'
         model_path_rootnet = 'snapshot_19_H36M+MPII.pth.tar'
         bbox_real = rootnet_cfg.bbox_real_Human36M
@@ -141,21 +143,17 @@ def main():
         rgb_data_dir = data_dir
         depth_data_dir = None
 
-
-
     # rgb camera intrinsics
-    intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
-    focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
-    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
-
-
+    intrinsics_rgb = np.loadtxt(str(data_dir / "intrinsics_rgb.txt"), dtype='f', delimiter=',')
+    focal_rgb = [intrinsics_rgb[0][0], intrinsics_rgb[1][1]]  # x-axis, y-axis
+    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]]  # x-axis, y-axis
 
     # focal_rgb = [678, 678]
     # princpt_rgb = [318, 228]
 
     # iterate on the frames
-    for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
-        original_img = cv2.imread(str(rgb_data_dir/filename.name))
+    for nFrame, filename in enumerate(rgb_data_dir.iterdir()):
+        original_img = cv2.imread(str(rgb_data_dir / filename.name))
         if original_img is None:
             print("Loading image failed.")
             continue
@@ -194,7 +192,7 @@ def main():
 
             k_value = np.array([math.sqrt(
                 bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
-                            bbox[2] * bbox[3]))]).astype(np.float32)
+                        bbox[2] * bbox[3]))]).astype(np.float32)
             k_value = torch.FloatTensor([k_value]).cpu()[None, :]
 
             # forward
@@ -234,12 +232,13 @@ def main():
             pose_3d = pixel2cam(pose_3d, focal_rgb, princpt_rgb)
             output_pose_3d[n] = pose_3d
 
-        #intrinsicts parameters depth camera
-        intrinsics_depth = np.loadtxt(str(data_dir/"intrinsics_depth.txt"), dtype='f', delimiter=',')
+        # intrinsicts parameters depth camera
+        intrinsics_depth = np.loadtxt(str(data_dir / "intrinsics_depth.txt"), dtype='f', delimiter=',')
         focal_depth = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
         princpt_depth = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
 
-        print("FRAME:" +str(nFrame)+" time:%.4f," % (time.time() - whole_time), "boxes:%.4f," % (time.time() - boxes_time),
+        print("FRAME:" + str(nFrame) + " time:%.4f," % (time.time() - whole_time),
+              "boxes:%.4f," % (time.time() - boxes_time),
               "pose:%.4f" % (time.time() - pose_time))
 
         # extract 2d poses
@@ -257,7 +256,7 @@ def main():
             vis_img = img_2d
 
         # find the depth frame correspondent to the rgb frame
-        rgb_frame_name = f"{(int(filename.stem)-1):05}"
+        rgb_frame_name = f"{(int(filename.stem) - 1):05}"
         if source == "pico":
             rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
             rgb_timestamp = rgb_time_table[np.where(rgb_time_table[:, 0] == rgb_frame_name)[0][0]][1]
@@ -269,7 +268,7 @@ def main():
             depth_frame_filename = process.extract(rgb_frame_name, depth_data_dir.iterdir(), limit=1)[0][0]
             depth = cv2.imread(str(depth_frame_filename), -1)
         else:
-            depth = np.zeros([original_img_width,original_img_height])
+            depth = np.zeros([original_img_width, original_img_height])
         pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
         points = np.array([output_pose_3d, pointcloud, vis_img])
         # points = np.array([output_pose_3d])
@@ -284,7 +283,6 @@ def main():
             np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
         continue
 
+
 if __name__ == "__main__":
     main()
-
-

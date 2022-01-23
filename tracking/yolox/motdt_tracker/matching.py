@@ -1,8 +1,8 @@
-import numpy as np
 import lap
+import numpy as np
+from cython_bbox import bbox_overlaps as bbox_ious
 from scipy.spatial.distance import cdist
 
-from cython_bbox import bbox_overlaps as bbox_ious
 from tracking.yolox.motdt_tracker import kalman_filter
 
 

@@ -2,19 +2,19 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) Megvii, Inc. and its affiliates.
 
+import itertools
+from typing import Optional
+
 import torch
 import torch.distributed as dist
 from torch.utils.data.sampler import BatchSampler as torchBatchSampler
 from torch.utils.data.sampler import Sampler
 
-import itertools
-from typing import Optional
-
 
 class YoloBatchSampler(torchBatchSampler):
     """
     This batch sampler will generate mini-batches of (dim, index) tuples from another sampler.
-    It works just like the :class:`torch.utils.data.sampler.BatchSampler`,
+    It works just like the :class:`torch.posenet_utils.data.sampler.BatchSampler`,
     but it will prepend a dimension, whilst ensuring it stays the same across one mini-batch.
     """
 
@@ -49,12 +49,12 @@ class InfiniteSampler(Sampler):
     """
 
     def __init__(
-        self,
-        size: int,
-        shuffle: bool = True,
-        seed: Optional[int] = 0,
-        rank=0,
-        world_size=1,
+            self,
+            size: int,
+            shuffle: bool = True,
+            seed: Optional[int] = 0,
+            rank=0,
+            world_size=1,
     ):
         """
         Args:

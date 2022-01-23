@@ -1,12 +1,13 @@
 import argparse
-from tqdm import tqdm
+
 import numpy as np
-import cv2
-from config import cfg
 import torch
-from base import Tester
-from utils.vis import vis_keypoints
 import torch.backends.cudnn as cudnn
+from base import Tester
+from tqdm import tqdm
+
+from config import cfg
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -23,12 +24,12 @@ def parse_args():
         gpus[0] = int(gpus[0])
         gpus[1] = int(gpus[1]) + 1
         args.gpu_ids = ','.join(map(lambda x: str(x), list(range(*gpus))))
-    
+
     assert args.test_epoch, 'Test epoch is required.'
     return args
 
-def main():
 
+def main():
     args = parse_args()
     cfg.set_args(args.gpu_ids)
     cudnn.fastest = True
@@ -41,14 +42,14 @@ def main():
     preds = []
     with torch.no_grad():
         for itr, (input_img, cam_param) in enumerate(tqdm(tester.batch_generator)):
-            
             coord_out = tester.model(input_img, cam_param)
             coord_out = coord_out.cpu().numpy()
             preds.append(coord_out)
-            
+
     # evaluate
     preds = np.concatenate(preds, axis=0)
-    tester._evaluate(preds, cfg.result_dir)    
+    tester._evaluate(preds, cfg.result_dir)
+
 
 if __name__ == "__main__":
     main()

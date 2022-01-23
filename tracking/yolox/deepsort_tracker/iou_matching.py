@@ -1,6 +1,8 @@
 # vim: expandtab:ts=4:sw=4
 from __future__ import absolute_import
+
 import numpy as np
+
 from tracking.yolox.deepsort_tracker import linear_assignment
 
 

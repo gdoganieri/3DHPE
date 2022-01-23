@@ -1,18 +1,18 @@
-import numpy as np
-#from numba import jit
-from collections import deque
 import itertools
 import os
+# from numba import jit
+from collections import deque
+
 import cv2
+import numpy as np
 import torch
 import torchvision
 
+from tracking.yolox.data.dataloading import get_yolox_datadir
 from . import matching
+from .basetrack import BaseTrack, TrackState
 from .kalman_filter import KalmanFilter
 from .reid_model import load_reid_model, extract_reid_features
-from tracking.yolox.data.dataloading import get_yolox_datadir
-
-from .basetrack import BaseTrack, TrackState
 
 
 class STrack(BaseTrack):
@@ -132,7 +132,7 @@ class STrack(BaseTrack):
                 self.tracker.update(image, self.tlwh)
 
     @property
-    #@jit
+    # @jit
     def tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
                 width, height)`.
@@ -145,7 +145,7 @@ class STrack(BaseTrack):
         return ret
 
     @property
-    #@jit
+    # @jit
     def tlbr(self):
         """Convert bounding box to format `(min x, min y, max x, max y)`, i.e.,
         `(top left, bottom right)`.
@@ -155,7 +155,7 @@ class STrack(BaseTrack):
         return ret
 
     @staticmethod
-    #@jit
+    # @jit
     def tlwh_to_xyah(tlwh):
         """Convert bounding box to format `(center x, center y, aspect ratio,
         height)`, where the aspect ratio is `width / height`.
@@ -181,7 +181,8 @@ class STrack(BaseTrack):
 
 class OnlineTracker(object):
 
-    def __init__(self, model_folder, min_cls_score=0.4, min_ap_dist=0.8, max_time_lost=30, use_tracking=True, use_refind=True):
+    def __init__(self, model_folder, min_cls_score=0.4, min_ap_dist=0.8, max_time_lost=30, use_tracking=True,
+                 use_refind=True):
 
         self.min_cls_score = min_cls_score
         self.min_ap_dist = min_ap_dist
@@ -189,9 +190,9 @@ class OnlineTracker(object):
 
         self.kalman_filter = KalmanFilter()
 
-        self.tracked_stracks = []   # type: list[STrack]
-        self.lost_stracks = []      # type: list[STrack]
-        self.removed_stracks = []   # type: list[STrack]
+        self.tracked_stracks = []  # type: list[STrack]
+        self.lost_stracks = []  # type: list[STrack]
+        self.removed_stracks = []  # type: list[STrack]
 
         self.use_refind = use_refind
         self.use_tracking = use_tracking
@@ -206,7 +207,7 @@ class OnlineTracker(object):
         # post process detections
         output_results = output_results.cpu().numpy()
         confidences = output_results[:, 4] * output_results[:, 5]
-        
+
         bboxes = output_results[:, :4]  # x1y1x2y2
         img_h, img_w = img_info[0], img_info[1]
         scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
@@ -234,17 +235,17 @@ class OnlineTracker(object):
         detections = [STrack(tlwh, score, from_det=True) for tlwh, score in zip(tlwhs, det_scores)]
         if self.use_tracking:
             tracks = [STrack(t.self_tracking(image), 0.6 * t.tracklet_score(), from_det=False)
-                        for t in itertools.chain(self.tracked_stracks, self.lost_stracks) if t.is_activated]
+                      for t in itertools.chain(self.tracked_stracks, self.lost_stracks) if t.is_activated]
             detections.extend(tracks)
         rois = np.asarray([d.tlbr for d in detections], dtype=np.float32)
         scores = np.asarray([d.score for d in detections], dtype=np.float32)
         # nms
         if len(detections) > 0:
             nms_out_index = torchvision.ops.batched_nms(
-            torch.from_numpy(rois),
-            torch.from_numpy(scores.reshape(-1)).to(torch.from_numpy(rois).dtype),
-            torch.zeros_like(torch.from_numpy(scores.reshape(-1))),
-            0.7,
+                torch.from_numpy(rois),
+                torch.from_numpy(scores.reshape(-1)).to(torch.from_numpy(rois).dtype),
+                torch.zeros_like(torch.from_numpy(scores.reshape(-1))),
+                0.7,
             )
             keep = nms_out_index.numpy()
             mask = np.zeros(len(rois), dtype=np.bool)
@@ -345,7 +346,7 @@ class OnlineTracker(object):
         output_stracks = output_tracked_stracks
 
         return output_stracks
-    
+
     @staticmethod
     def _xyxy_to_tlwh_array(bbox_xyxy):
         if isinstance(bbox_xyxy, np.ndarray):

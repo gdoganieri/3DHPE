@@ -2,12 +2,12 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) Megvii, Inc. and its affiliates.
 
+import os
+import random
+
 import torch
 from torch.utils.data.dataloader import DataLoader as torchDataLoader
 from torch.utils.data.dataloader import default_collate
-
-import os
-import random
 
 from .samplers import YoloBatchSampler
 
@@ -29,7 +29,7 @@ def get_yolox_datadir():
 class DataLoader(torchDataLoader):
     """
     Lightnet dataloader that enables on the fly resizing of the images.
-    See :class:`torch.utils.data.DataLoader` for more information on the arguments.
+    See :class:`torch.posenet_utils.data.DataLoader` for more information on the arguments.
     Check more on the following website:
     https://gitlab.com/EAVISE/lightnet/-/blob/master/lightnet/data/_dataloading.py
 
@@ -102,7 +102,7 @@ class DataLoader(torchDataLoader):
             if sampler is None:
                 if shuffle:
                     sampler = torch.utils.data.sampler.RandomSampler(self.dataset)
-                    # sampler = torch.utils.data.DistributedSampler(self.dataset)
+                    # sampler = torch.posenet_utils.data.DistributedSampler(self.dataset)
                 else:
                     sampler = torch.utils.data.sampler.SequentialSampler(self.dataset)
             batch_sampler = YoloBatchSampler(

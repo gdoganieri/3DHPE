@@ -77,5 +77,5 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
     if alpha >= 0:
         alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
         loss = alpha_t * loss
-    #return loss.mean(0).sum() / num_boxes
+    # return loss.mean(0).sum() / num_boxes
     return loss.sum() / num_boxes

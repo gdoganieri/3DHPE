@@ -1,8 +1,10 @@
 import argparse
-from config import cfg
-import torch
-from base import Trainer
+
 import torch.backends.cudnn as cudnn
+from base import Trainer
+
+from config import cfg
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -21,8 +23,8 @@ def parse_args():
 
     return args
 
+
 def main():
-    
     # argument parse and create log
     args = parse_args()
     cfg.set_args(args.gpu_ids, args.continue_train)
@@ -35,7 +37,7 @@ def main():
 
     # train
     for epoch in range(trainer.start_epoch, cfg.end_epoch):
-        
+
         trainer.set_lr(epoch)
         trainer.tot_timer.tic()
         trainer.read_timer.tic()
@@ -55,7 +57,7 @@ def main():
 
             loss.backward()
             trainer.optimizer.step()
-            
+
             trainer.gpu_timer.toc()
 
             screen = [
@@ -65,7 +67,7 @@ def main():
                     trainer.tot_timer.average_time, trainer.gpu_timer.average_time, trainer.read_timer.average_time),
                 '%.2fh/epoch' % (trainer.tot_timer.average_time / 3600. * trainer.itr_per_epoch),
                 '%s: %.4f' % ('loss_coord', loss_coord.detach()),
-                ]
+            ]
             trainer.logger.info(' '.join(screen))
 
             trainer.tot_timer.toc()
@@ -77,7 +79,7 @@ def main():
             'network': trainer.model.state_dict(),
             'optimizer': trainer.optimizer.state_dict(),
         }, epoch)
-        
+
 
 if __name__ == "__main__":
     main()

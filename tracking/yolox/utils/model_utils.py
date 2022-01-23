@@ -2,11 +2,11 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
 
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
 from thop import profile
-
-from copy import deepcopy
 
 __all__ = [
     "fuse_conv_and_bn",
@@ -17,7 +17,6 @@ __all__ = [
 
 
 def get_model_info(model, tsize):
-
     stride = 64
     img = torch.zeros((1, 3, stride, stride), device=next(model.parameters()).device)
     flops, params = profile(deepcopy(model), inputs=(img,), verbose=False)
@@ -40,8 +39,8 @@ def fuse_conv_and_bn(conv, bn):
             groups=conv.groups,
             bias=True,
         )
-        .requires_grad_(False)
-        .to(conv.weight.device)
+            .requires_grad_(False)
+            .to(conv.weight.device)
     )
 
     # prepare filters

@@ -1,10 +1,9 @@
-import cv2
 import argparse
-import numpy as np
-import os
-import json
 from pathlib import Path
-from posenet.common.posenet_utils.vis import vis_3d_multiple_skeleton_and_pointcloud
+
+import cv2
+import numpy as np
+
 from d_visualization import vis_skeletons, vis_skeletons_different_bboxset, vis_skeletons_track
 
 
@@ -68,12 +67,12 @@ def vis(weights, source, sequence, tracking, save):
         # output_pose_3d = rotate_poses(output_pose_3d, R, t)
 
         print(str(resNum))
-        if tracking and len(output_pose_3d)>0:
+        if tracking and len(output_pose_3d) > 0:
             tracking_ids = result[3]
             # tracking_colors = np.array(result[4],dtype=np.float32)[:,::-1] / 255
 
             vis_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir,
-                                     tracking_ids, save)
+                                tracking_ids, save)
         else:
             vis_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir, save)
 
@@ -125,6 +124,7 @@ def vis_multi_bboxset(weights, source, sequence, save):
         output_pose_3d[4][n] = np.load(str(filepath_2600), allow_pickle=True)[0]
 
     vis_skeletons_different_bboxset(output_pose_3d, chain_ixs, pointcloud, output_pose_2d, plot_dir, save)
+
 
 def main():
     def parse_args():

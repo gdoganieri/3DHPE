@@ -1,17 +1,19 @@
-import cv2
+import argparse
 import math
-import time
 import os
 import os.path as osp
+import time
+from pathlib import Path
+
+import cv2
 import numpy as np
 import torch
-import argparse
+import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
-from torch.nn.parallel.data_parallel import DataParallel
 from thefuzz import process
-from pathlib import Path
+from torch.nn.parallel.data_parallel import DataParallel
+
 from d_visualization import depthmap2pointcloud
 
 # posenet import
@@ -21,17 +23,18 @@ from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
 from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam
 
-#rootnet import
+# rootnet import
 rootnet_path = os.getcwd() + "/rootnet"
 from rootnet.main.config import cfg as rootnet_cfg
 from rootnet.main.model import get_pose_net as get_root_net
 from rootnet.common.rootnet_utils.pose_utils import process_bbox as rootnet_process_bbox
 from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_image
 
-#tracking import
+# tracking import
 from tracking.yolox.tracker.byte_tracker import BYTETracker
 from tracking.yolox.utils.visualize import plot_tracking
 from tracking.rootTrack.rootTracker import RootTracker
+
 
 def main():
     def parse_args():
@@ -52,7 +55,7 @@ def main():
         parser.add_argument('--byteTrack', dest='byteTrack', action='store_true')
         parser.add_argument('--no-byteTrack', dest='byteTrack', action='store_false')
         parser.set_defaults(byteTrack=True)
-        #tracking argument byteTrack
+        # tracking argument byteTrack
         parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
         parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
         parser.add_argument("--match_thresh", type=float, default=0.8, help="matching threshold for tracking")
@@ -85,7 +88,7 @@ def main():
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     if use_yolo:
         # YOLO v5 model
-        detector_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+        detector_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True, force_reload=True)
         detector_model.eval().to(device)
         detector_model.classes = [0]  # filter for specific classes
     else:
@@ -95,7 +98,7 @@ def main():
         detector_model.eval().to(device)
 
     detector_score_threshold = 0.8
-    detector_transform = transforms.Compose([transforms.ToTensor(),])
+    detector_transform = transforms.Compose([transforms.ToTensor(), ])
 
     posenet_cfg.set_args(args.gpu_ids)
     cudnn.benchmark = True
@@ -119,9 +122,9 @@ def main():
         joint_num = 18
         joints_name = ('Pelvis', 'R_Hip', 'R_Knee', 'R_Ankle', 'L_Hip', 'L_Knee', 'L_Ankle', 'Torso', 'Neck', 'Nose',
                        'Head', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'Thorax')
-        flip_pairs = ( (1, 4), (2, 5), (3, 6), (14, 11), (15, 12), (16, 13) )
-        skeleton = ( (0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
-                     (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6) )
+        flip_pairs = ((1, 4), (2, 5), (3, 6), (14, 11), (15, 12), (16, 13))
+        skeleton = ((0, 7), (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13), (8, 14), (14, 15),
+                    (15, 16), (0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6))
         model_path_posenet = 'snapshot_24_H36M+MPII.pth.tar'
         model_path_rootnet = 'snapshot_19_H36M+MPII.pth.tar'
         bbox_real = rootnet_cfg.bbox_real_Human36M
@@ -168,9 +171,9 @@ def main():
         depth_data_dir = None
 
     # rgb camera intrinsics
-    intrinsics_rgb = np.loadtxt(str(data_dir/"intrinsics_rgb.txt"), dtype='f', delimiter=',')
-    focal_rgb = [intrinsics_rgb[0][0],intrinsics_rgb[1][1]] # x-axis, y-axis
-    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]] # x-axis, y-axis
+    intrinsics_rgb = np.loadtxt(str(data_dir / "intrinsics_rgb.txt"), dtype='f', delimiter=',')
+    focal_rgb = [intrinsics_rgb[0][0], intrinsics_rgb[1][1]]  # x-axis, y-axis
+    princpt_rgb = [intrinsics_rgb[0][2], intrinsics_rgb[1][2]]  # x-axis, y-axis
 
     # focal_rgb = [678, 678]
     # princpt_rgb = [318, 228]
@@ -182,10 +185,10 @@ def main():
         tracker = RootTracker(500, 10, 5)
 
     # iterate on the frames
-    for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
-        if nFrame%2 == 0 and nFrame > 0:
+    for nFrame, filename in enumerate(rgb_data_dir.iterdir()):
+        if nFrame % 2 == 0 and nFrame > 0:
             # load the frame
-            original_img = cv2.imread(str(rgb_data_dir/filename.name))
+            original_img = cv2.imread(str(rgb_data_dir / filename.name))
             if original_img is None:
                 print("Loading image failed.")
                 continue
@@ -237,7 +240,7 @@ def main():
 
                 k_value = np.array([math.sqrt(
                     bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
-                                bbox[2] * bbox[3]))]).astype(np.float32)
+                            bbox[2] * bbox[3]))]).astype(np.float32)
                 k_value = torch.FloatTensor([k_value]).cpu()[None, :]
 
                 # forward
@@ -270,7 +273,8 @@ def main():
                 pose_3d[:, 1] = pose_3d[:, 1] / posenet_cfg.output_shape[0] * posenet_cfg.input_shape[0]
                 pose_3d_xy1 = np.concatenate((pose_3d[:, :2], np.ones_like(pose_3d[:, :1])), 1)
                 img2bb_trans_001 = np.concatenate((img2bb_trans, np.array([0, 0, 1]).reshape(1, 3)))
-                pose_3d[:, :2] = np.dot(np.linalg.inv(img2bb_trans_001), pose_3d_xy1.transpose(1, 0)).transpose(1, 0)[:, :2]
+                pose_3d[:, :2] = np.dot(np.linalg.inv(img2bb_trans_001), pose_3d_xy1.transpose(1, 0)).transpose(1, 0)[:,
+                                 :2]
                 output_pose_2d[n] = pose_3d[:, :2]
 
                 # root-relative discretized depth -> absolute continuous depth
@@ -281,11 +285,10 @@ def main():
                 output_pose_3d[n] = pose_3d
             pose_time_stop = time.time()
             whole_time_stop = time.time()
-            #intrinsicts parameters depth camera
-            intrinsics_depth = np.loadtxt(str(data_dir/"intrinsics_depth.txt"), dtype='f', delimiter=',')
+            # intrinsicts parameters depth camera
+            intrinsics_depth = np.loadtxt(str(data_dir / "intrinsics_depth.txt"), dtype='f', delimiter=',')
             focal_depth = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
             princpt_depth = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
-
 
             # tracking
             tracking_time_start = time.time()
@@ -296,7 +299,9 @@ def main():
             tracking_skeletons_3D = []
 
             if use_byteTrack:
-                tracking_targets = tracker.update(bbox_list_copy[:,:5], outpose_tracking, [original_img_height, original_img_width], (original_img_height, original_img_width))
+                tracking_targets = tracker.update(bbox_list_copy[:, :5], outpose_tracking,
+                                                  [original_img_height, original_img_width],
+                                                  (original_img_height, original_img_width))
                 for t in tracking_targets:
                     tlwh = t.tlwh
                     tid = t.track_id
@@ -308,7 +313,7 @@ def main():
                         tracking_skeletons.append(t.skeleton)
 
             else:
-                tracker.update(outpose_tracking, root_pt, bbox_list_copy[:,:4])
+                tracker.update(outpose_tracking, root_pt, bbox_list_copy[:, :4])
                 for t in tracker.tracks:
                     # tracking_predictions.append(np.array(pixel2world(int(online_targets.tracks[i].trace[-1][0, 0]),
                     #                                         int(online_targets.tracks[i].trace[-1][0, 1]),
@@ -341,7 +346,7 @@ def main():
             vis_img = original_img.copy()
             vis_img = plot_tracking(
                 vis_img, tracking_bboxes, tracking_ids, tracking_skeletons, skeleton, joint_num, frame_id=nFrame,
-                fps=1. / (time.time() - whole_time)
+                fps=1. / whole_time
             )
 
             cv2.namedWindow("2D Detection + Pose", cv2.WINDOW_NORMAL)
@@ -351,11 +356,13 @@ def main():
                 cv2.destroyAllWindows()
 
             # find the depth frame correspondent to the rgb frame
-            rgb_frame_name = f"{(int(filename.stem)-1):05}"
+            rgb_frame_name = f"{(int(filename.stem) - 1):05}"
             if source == "pico":
-                rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
+                rgb_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str,
+                                            delimiter='\t')
                 rgb_timestamp = rgb_time_table[np.where(rgb_time_table[:, 0] == rgb_frame_name)[0][0]][1]
-                depth_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str, delimiter='\t')
+                depth_time_table = np.loadtxt(str(data_dir / "rgb" / f"PICO-rgb-{sequence}.txt"), dtype=str,
+                                              delimiter='\t')
                 depth_timestamp = process.extract(rgb_timestamp, depth_time_table[:, 1], limit=1)[0][0]
                 depth_frame_name = depth_time_table[np.where(depth_time_table[:, 1] == depth_timestamp)[0][0]][0]
                 depth = cv2.imread(f'{depth_data_dir / depth_frame_name}.png', -1)
@@ -363,11 +370,10 @@ def main():
                 depth_frame_filename = process.extract(rgb_frame_name, depth_data_dir.iterdir(), limit=1)[0][0]
                 depth = cv2.imread(str(depth_frame_filename), -1)
             else:
-                depth = np.zeros([original_img_width,original_img_height])
+                depth = np.zeros([original_img_width, original_img_height])
             pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
 
             # points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_traces, tracking_colors, tracking_id])
-
 
             if bboxdiff:
                 points = np.array([output_pose_3d, pointcloud, vis_img])
@@ -405,7 +411,6 @@ def main():
                 file_object.write(time_stats + "\n")
         continue
 
+
 if __name__ == "__main__":
     main()
-
-

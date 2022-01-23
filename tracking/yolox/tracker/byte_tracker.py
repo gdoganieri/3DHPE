@@ -1,11 +1,13 @@
 import numpy as np
 
-from .kalman_filter import KalmanFilter
 from . import matching
 from .basetrack import BaseTrack, TrackState
+from .kalman_filter import KalmanFilter
+
 
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
+
     def __init__(self, tlwh, score):
 
         # wait activate
@@ -148,7 +150,7 @@ class BYTETracker(object):
 
         self.frame_id = 0
         self.args = args
-        #self.det_thresh = args.track_thresh
+        # self.det_thresh = args.track_thresh
         self.det_thresh = args.track_thresh + 0.1
         self.buffer_size = int(frame_rate / 30.0 * args.track_buffer)
         self.max_time_lost = self.buffer_size
@@ -216,7 +218,7 @@ class BYTETracker(object):
                 track.update(detections[idet], self.frame_id, skelets[idet])
                 activated_starcks.append(track)
             else:
-                track.re_activate(det, self.frame_id, new_id=False)
+                track.re_activate(det, self.frame_id, skelets[idet], new_id=False)
                 refind_stracks.append(track)
 
         ''' Step 3: Second association, with low score detection boxes'''
@@ -224,7 +226,7 @@ class BYTETracker(object):
         if len(dets_second) > 0:
             '''Detections'''
             detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for
-                          (tlbr, s) in zip(dets_second, scores_second)]
+                                 (tlbr, s) in zip(dets_second, scores_second)]
         else:
             detections_second = []
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
@@ -238,7 +240,7 @@ class BYTETracker(object):
                 track.update(det, self.frame_id, skt)
                 activated_starcks.append(track)
             else:
-                track.re_activate(det, self.frame_id, skt,  new_id=False)
+                track.re_activate(det, self.frame_id, skt, new_id=False)
                 refind_stracks.append(track)
 
         for it in u_track:

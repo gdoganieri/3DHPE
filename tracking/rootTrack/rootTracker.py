@@ -1,8 +1,10 @@
-import numpy as np
-from tracking.rootTrack.kalmanFilter import KalmanFilter
-from scipy.optimize import linear_sum_assignment
-from collections import deque
 import random
+from collections import deque
+
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+from tracking.rootTrack.kalmanFilter import KalmanFilter
 
 
 class Tracks(object):
@@ -28,6 +30,7 @@ class Tracks(object):
     def upTrack(self, skeleton, bbox):
         self.track_skeleton = skeleton
         self.track_bbox = bbox
+
 
 class RootTracker(object):
     """docstring for Tracker"""
@@ -96,7 +99,6 @@ class RootTracker(object):
                 self.tracks[i].predict(detections[assignment[i]])
 
             self.tracks[i].trace.append(self.tracks[i].prediction)
-
 
 # def skeleton_track(skeletons, frame, tracker, root_pt, bboxes):
 #

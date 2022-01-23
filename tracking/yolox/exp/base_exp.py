@@ -2,16 +2,16 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
 
-import torch
-from torch.nn import Module
-
-from tracking.yolox.utils import LRScheduler
-
 import ast
 import pprint
 from abc import ABCMeta, abstractmethod
-from tabulate import tabulate
 from typing import Dict
+
+import torch
+from tabulate import tabulate
+from torch.nn import Module
+
+from tracking.yolox.utils import LRScheduler
 
 
 class BaseExp(metaclass=ABCMeta):
@@ -29,7 +29,7 @@ class BaseExp(metaclass=ABCMeta):
 
     @abstractmethod
     def get_data_loader(
-        self, batch_size: int, is_distributed: bool
+            self, batch_size: int, is_distributed: bool
     ) -> Dict[str, torch.utils.data.DataLoader]:
         pass
 
@@ -39,7 +39,7 @@ class BaseExp(metaclass=ABCMeta):
 
     @abstractmethod
     def get_lr_scheduler(
-        self, lr: float, iters_per_epoch: int, **kwargs
+            self, lr: float, iters_per_epoch: int, **kwargs
     ) -> LRScheduler:
         pass
 
