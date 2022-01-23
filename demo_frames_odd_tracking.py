@@ -6,36 +6,32 @@ import os.path as osp
 import numpy as np
 import torch
 import argparse
+import torchvision
 import torchvision.transforms as transforms
-from torch.nn.parallel.data_parallel import DataParallel
 import torch.backends.cudnn as cudnn
+from torch.nn.parallel.data_parallel import DataParallel
 from thefuzz import process
-from tracking.tracker import Tracker
+from pathlib import Path
+from d_visualization import depthmap2pointcloud
 
+# posenet import
 posenet_path = os.getcwd() + "/posenet"
-
 from posenet.main.config import cfg as posenet_cfg
 from posenet.main.model import get_pose_net
 from posenet.data.dataset import generate_patch_image
-from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam, cam2pixel
+from posenet.common.posenet_utils.pose_utils import process_bbox, pixel2cam
 
+#rootnet import
 rootnet_path = os.getcwd() + "/rootnet"
-
 from rootnet.main.config import cfg as rootnet_cfg
 from rootnet.main.model import get_pose_net as get_root_net
 from rootnet.common.rootnet_utils.pose_utils import process_bbox as rootnet_process_bbox
 from rootnet.data.dataset import generate_patch_image as rootnet_generate_patch_image
 
-import torchvision
-
-from pathlib import Path
-from posenet.common.posenet_utils.vis import vis_keypoints, vis_keypoints_track
-from d_visualization import depthmap2pointcloud, pixel2world, vis_skeletons_track
-
-
-# from tracking.tracker import skeleton_track
-from yolox.tracker.byte_tracker import BYTETracker
-from yolox.utils.visualize import plot_tracking
+#tracking import
+from tracking.yolox.tracker.byte_tracker import BYTETracker
+from tracking.yolox.utils.visualize import plot_tracking
+from tracking.rootTrack.rootTracker import RootTracker
 
 def main():
     def parse_args():
@@ -69,16 +65,7 @@ def main():
 
         args = parser.parse_args()
 
-        # test gpus
-        if not args.gpu_ids:
-            assert 0, print("Please set proper gpu ids")
-
-        if '-' in args.gpu_ids:
-            gpus = args.gpu_ids.split('-')
-            gpus[0] = 0 if not gpus[0].isdigit() else int(gpus[0])
-            gpus[1] = len(mem_info()) if not gpus[1].isdigit() else int(gpus[1]) + 1
-            args.gpu_ids = ','.join(map(lambda x: str(x), list(range(*gpus))))
-
+        assert args.gpu_ids, 'Please set proper gpu ids.'
         assert args.weights, 'Pretrained weights are required.'
         assert args.source, 'Source is required.'
         assert args.sequence, 'Sequence is required.'
@@ -97,11 +84,10 @@ def main():
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     if use_yolo:
-        # Model
+        # YOLO v5 model
         detector_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
         detector_model.eval().to(device)
         detector_model.classes = [0]  # filter for specific classes
-
     else:
         # FASTER RCNN v3 320 fpn
         detector_model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True,
@@ -109,9 +95,7 @@ def main():
         detector_model.eval().to(device)
 
     detector_score_threshold = 0.8
-    detector_transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
+    detector_transform = transforms.Compose([transforms.ToTensor(),])
 
     posenet_cfg.set_args(args.gpu_ids)
     cudnn.benchmark = True
@@ -143,7 +127,7 @@ def main():
         bbox_real = rootnet_cfg.bbox_real_Human36M
         root_pt = 0
     else:
-        assert 'Pretrained weights are required.'
+        assert 'Please choose between MuCo or H36M.'
         return -1
 
     # snapshot load posenet
@@ -195,21 +179,22 @@ def main():
     if use_byteTrack:
         tracker = BYTETracker(args)
     else:
-        tracker = Tracker(500, 10, 5)
+        tracker = RootTracker(500, 10, 5)
 
     # iterate on the frames
     for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
         if nFrame%2 == 0 and nFrame > 0:
+            # load the frame
             original_img = cv2.imread(str(rgb_data_dir/filename.name))
             if original_img is None:
                 print("Loading image failed.")
                 continue
             original_img_height, original_img_width = original_img.shape[:-1]
 
-            whole_time = time.time()
+            whole_time_start = time.time()
 
             # get bboxes
-            boxes_time = time.time()
+            boxes_time_start = time.time()
             model_input = detector_transform(original_img).unsqueeze(0).to(device)
             if use_yolo:
                 # YOLO
@@ -218,7 +203,6 @@ def main():
                 pred_classes = results["name"]
                 labels = results["class"]
                 bboxs = model_output.xyxy[0].cpu().numpy()
-
                 scores = bboxs[:, 4]
                 remain_inds = scores > detector_score_threshold
                 bbox_list = bboxs[remain_inds]
@@ -226,22 +210,19 @@ def main():
                 # FASTER RCNN
                 outputs = detector_model(model_input)
                 labels = outputs[0]['labels'].cpu().detach().numpy()
-                # print(labels)
                 pred_scores = outputs[0]['scores'].cpu().detach().numpy()
                 bboxes = outputs[0]['boxes'].cpu().detach().numpy()
-
                 bboxs = np.zeros([len(bboxes), 5])
                 bboxs[:, :4] = [bbox for bbox in bboxes]
                 bboxs[:, 4] = [score for score in pred_scores]
-
                 bbox_list = bboxs[pred_scores >= detector_score_threshold]
                 labels = labels[pred_scores >= detector_score_threshold]
                 bbox_list = bbox_list[labels == 1]
 
             bbox_list_copy = bbox_list.copy()
+            boxes_time_stop = time.time()
 
-            pose_time = time.time()
-
+            root_time_start = time.time()
             # calculate roots
             person_num = len(bbox_list)
             root_depth_list = np.zeros(person_num)
@@ -265,11 +246,12 @@ def main():
                 img = img[0].cpu().numpy()
                 root_3d = root_3d[0].cpu().numpy()
                 root_depth_list[n] = root_3d[2]
-
+            root_time_stop = time.time()
             if person_num < 1:
                 continue
 
             # for each cropped and resized human image, forward it to PoseNet
+            pose_time_start = time.time()
             output_pose_2d = np.zeros((person_num, joint_num, 2))
             output_pose_3d = np.zeros((person_num, joint_num, 3))
             outpose_tracking = np.zeros((person_num, joint_num, 3))
@@ -297,18 +279,16 @@ def main():
                 outpose_tracking[n] = pose_3d
                 pose_3d = pixel2cam(pose_3d, focal_rgb, princpt_rgb)
                 output_pose_3d[n] = pose_3d
-
+            pose_time_stop = time.time()
+            whole_time_stop = time.time()
             #intrinsicts parameters depth camera
             intrinsics_depth = np.loadtxt(str(data_dir/"intrinsics_depth.txt"), dtype='f', delimiter=',')
             focal_depth = [intrinsics_depth[0][0], intrinsics_depth[1][1]]  # x-axis, y-axis
             princpt_depth = [intrinsics_depth[0][2], intrinsics_depth[1][2]]  # x-axis, y-axis
 
-            print("FRAME:" +str(nFrame)+" time:%.4f," % (time.time() - whole_time), "boxes:%.4f," % (time.time() - boxes_time),
-                  "pose:%.4f" % (time.time() - pose_time))
 
             # tracking
-            vis_img = original_img.copy()
-
+            tracking_time_start = time.time()
             tracking_bboxes = []
             tracking_ids = []
             tracking_scores = []
@@ -345,33 +325,28 @@ def main():
                     curr_bbox[2] = curr_bbox[2] - curr_bbox[0]
                     curr_bbox[3] = curr_bbox[3] - curr_bbox[1]
                     tracking_bboxes.append(curr_bbox)
+            tracking_time_stop = time.time()
 
+            whole_time = whole_time_stop - whole_time_start
+            boxes_time = boxes_time_stop - boxes_time_start
+            root_time = root_time_stop - root_time_start
+            pose_time = pose_time_stop - pose_time_start
+            tracking_time = tracking_time_stop - tracking_time_start
+            time_stats = f"FRAME:{nFrame}, time:{whole_time:.5f}, " \
+                         f"boxes:{boxes_time:.5f}, rootNet:{root_time:.5f}, " \
+                         f"poseNet:{pose_time:.5f}, tracking:{tracking_time:.5f}"
+
+            print(time_stats)
+
+            vis_img = original_img.copy()
             vis_img = plot_tracking(
                 vis_img, tracking_bboxes, tracking_ids, tracking_skeletons, skeleton, joint_num, frame_id=nFrame,
                 fps=1. / (time.time() - whole_time)
             )
-            # extract 2d poses
-                # for n in range(person_num):
-                #     vis_kps = np.zeros((3, joint_num))
-                #     # vis_kps[0, :] = output_pose_2d[n][:, 0]
-                #     # vis_kps[1, :] = output_pose_2d[n][:, 1]
-                #     vis_kps[0, :] = online_targets.tracks[n].track_skeleton[:,0]
-                #     vis_kps[1, :] = online_targets.tracks[n].track_skeleton[:,1]
-                #     vis_kps[2, :] = 1
-                #     img_2d = vis_keypoints_track(vis_img, vis_kps, skeleton, online_targets.tracks[n].track_color)
-                #     img_2d = cv2.rectangle(img_2d,
-                #                            (int(online_targets.tracks[n].track_bbox[0]), int(online_targets.tracks[n].track_bbox[1])),
-                #                            (int(online_targets.tracks[n].track_bbox[2]), int(online_targets.tracks[n].track_bbox[3])),
-                #                            online_targets.tracks[n].track_color, thickness=1)
-                #
-                #     cv2.putText(img_2d, str(online_targets.tracks[n].trackId),
-                #                 (int(online_targets.tracks[n].track_bbox[0]), int(online_targets.tracks[n].track_bbox[1])-10), 0, 0.5,
-                #                 online_targets.tracks[n].track_color, 2)
-                #     vis_img = img_2d
 
             cv2.namedWindow("2D Detection + Pose", cv2.WINDOW_NORMAL)
             vis_img = cv2.resize(vis_img, (1080, 640))
-            cv2.imshow('image', vis_img)
+            cv2.imshow('2D Detection + Pose', vis_img)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
 
@@ -426,6 +401,8 @@ def main():
                 output_dir.mkdir(parents=True, exist_ok=True)
 
             np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
+            with open(f"{output_dir}/stats.txt", "a") as file_object:
+                file_object.write(time_stats + "\n")
         continue
 
 if __name__ == "__main__":

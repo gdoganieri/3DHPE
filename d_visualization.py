@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import typing as tp
 
-from yolox.utils.visualize import get_color
+from tracking.yolox.utils.visualize import get_color
 
 
 def world2pixel(x, y, z, img_width, img_height, fx, fy, cx=None, cy=None):
