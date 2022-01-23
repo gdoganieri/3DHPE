@@ -3,7 +3,6 @@ from tracking.kalmanFilter import KalmanFilter
 from scipy.optimize import linear_sum_assignment
 from collections import deque
 import random
-import cv2
 
 
 class Tracks(object):
@@ -71,17 +70,18 @@ class Tracker(object):
                     self.un_assigned_tracks.append(i)
                 else:
                     self.tracks[i].skipped_frames += 1
+            else:
+                self.tracks[i].skipped_frames += 1
 
         for i in range(len(self.tracks)):
             if self.tracks[i].skipped_frames > self.max_frame_skipped:
                 self.del_tracks.append(i)
 
         if len(self.del_tracks) > 0:
-            for i in range(len(self.del_tracks)):
-                self.tracks[i].trackId = None
-                self.tracks[i].upTrack(None, None)
+            for i in self.del_tracks:
                 del self.tracks[i]
                 del assignment[i]
+            self.del_tracks = []
 
         for i in range(len(detections)):
             if i not in assignment:
@@ -98,19 +98,19 @@ class Tracker(object):
             self.tracks[i].trace.append(self.tracks[i].prediction)
 
 
-def skeleton_track(skeletons, frame, tracker, root_pt, bboxes):
-
-    if (len(skeletons)>0):
-        tracker.update(skeletons, root_pt, bboxes)
-        for i in range(len(tracker.tracks)):
-            color = tracker.tracks[i].track_color
-            if len(tracker.tracks[i].trace) > 1:
-                x = int(tracker.tracks[i].trace[-1][0, 0])
-                y = int(tracker.tracks[i].trace[-1][0, 1])
-                for k in range(len(tracker.tracks[i].trace)):
-                    x = int(tracker.tracks[i].trace[k][0, 0])
-                    y = int(tracker.tracks[i].trace[k][0, 1])
-                    cv2.circle(frame, (x, y), 3, color, -1)
-                cv2.circle(frame, (x, y), 5, color, -1)
-            # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
-    return tracker
+# def skeleton_track(skeletons, frame, tracker, root_pt, bboxes):
+#
+#     if (len(skeletons)>0):
+#         tracker.update(skeletons, root_pt, bboxes)
+#         for i in range(len(tracker.tracks)):
+#             color = tracker.tracks[i].track_color
+#             if len(tracker.tracks[i].trace) > 1:
+#                 x = int(tracker.tracks[i].trace[-1][0, 0])
+#                 y = int(tracker.tracks[i].trace[-1][0, 1])
+#                 for k in range(len(tracker.tracks[i].trace)):
+#                     x = int(tracker.tracks[i].trace[k][0, 0])
+#                     y = int(tracker.tracks[i].trace[k][0, 1])
+#                     cv2.circle(frame, (x, y), 3, color, -1)
+#                 cv2.circle(frame, (x, y), 5, color, -1)
+#             # cv2.circle(frame, (int(centers[j, 0]), int(centers[j, 1])), 15, (0, 0, 0), -1)
+#     return tracker

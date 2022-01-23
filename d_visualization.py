@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import typing as tp
 
+from yolox.utils.visualize import get_color
+
+
 def world2pixel(x, y, z, img_width, img_height, fx, fy, cx=None, cy=None):
     if cx is None:
         cx = img_width / 2
@@ -155,16 +158,20 @@ def vis_skeletons(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.Li
         plt.show()
 
 def vis_skeletons_track(skeletons: tp.Sequence[np.ndarray], chains_ixs: tp.Tuple[tp.List[int], tp.List[int], tp.List[int]],
-                        pointcloud, resNum, pose2D, plot_dir, tracking_predictions, tracking_colors, tracking_id, save):
+                        pointcloud, resNum, pose2D, plot_dir, tracking_ids, save):
 
     fig1 = plt.figure("Pointcloud + Skeleton")
     ax = plt.axes(projection="3d")
     for n, skeleton in enumerate(skeletons):
-        if len(tracking_predictions) >=1:
-            color = tracking_colors[n]
-            ax.scatter3D(tracking_predictions[n][0], tracking_predictions[n][2], tracking_predictions[n][1],
-                         color='g', marker='^', s=50)
-            ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, tracking_id[n], color=color)
+        if len(tracking_ids) >=1:
+            obj_id = int(tracking_ids[n])
+            id_text = '{}'.format(int(obj_id))
+            color = get_color(abs(obj_id))
+            color = np.array(color[::-1], dtype=np.float32)/255
+            # color = (color[::-1] / 255).dtype=np.float32
+            # ax.scatter3D(tracking_predictions[n][0], tracking_predictions[n][2], tracking_predictions[n][1],
+            #              color='g', marker='^', s=50)
+            ax.text(skeleton[0, 0], skeleton[0, 2], -skeleton[0, 1] + 250, id_text, color=color)
         else:
             color = skeleton[:,2]
         chains = get_chains(skeleton, *chains_ixs)

@@ -69,12 +69,11 @@ def vis(weights, source, sequence, tracking, save):
 
         print(str(resNum))
         if tracking and len(output_pose_3d)>0:
-            tracking_predictions = result[3]
-            # tracking_traces = result[4]
-            tracking_colors = np.array(result[4],dtype=np.float32)[:,::-1] / 255
-            tracking_id = result[5]
+            tracking_ids = result[3]
+            # tracking_colors = np.array(result[4],dtype=np.float32)[:,::-1] / 255
+
             vis_skeletons_track(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir,
-                                     tracking_predictions, tracking_colors, tracking_id, save)
+                                     tracking_ids, save)
         else:
             vis_skeletons(output_pose_3d, chain_ixs, pointcloud[::50, :], resNum, output_pose_2d, plot_dir, save)
 

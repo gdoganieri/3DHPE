@@ -33,8 +33,9 @@ from posenet.common.posenet_utils.vis import vis_keypoints, vis_keypoints_track
 from d_visualization import depthmap2pointcloud, pixel2world, vis_skeletons_track
 
 
-from tracking.tracker import skeleton_track
+# from tracking.tracker import skeleton_track
 from yolox.tracker.byte_tracker import BYTETracker
+from yolox.utils.visualize import plot_tracking
 
 def main():
     def parse_args():
@@ -51,10 +52,10 @@ def main():
         parser.set_defaults(bboxdiff=False)
         parser.add_argument('--yolo', dest='yolo', action='store_true')
         parser.add_argument('--no-yolo', dest='yolo', action='store_false')
-        parser.set_defaults(tracking=False)
+        parser.set_defaults(yolo=True)
         parser.add_argument('--byteTrack', dest='byteTrack', action='store_true')
         parser.add_argument('--no-byteTrack', dest='byteTrack', action='store_false')
-        parser.set_defaults(tracking=True)
+        parser.set_defaults(byteTrack=True)
         #tracking argument byteTrack
         parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
         parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
@@ -198,7 +199,7 @@ def main():
 
     # iterate on the frames
     for nFrame,filename in enumerate(rgb_data_dir.iterdir()):
-        if nFrame%2 == 0 and nFrame > 50:
+        if nFrame%2 == 0 and nFrame > 0:
             original_img = cv2.imread(str(rgb_data_dir/filename.name))
             if original_img is None:
                 print("Loading image failed.")
@@ -216,18 +217,27 @@ def main():
                 results = model_output.pandas().xyxy[0]
                 pred_classes = results["name"]
                 labels = results["class"]
-                bbox_list = model_output.xyxy[0].cpu().numpy()[:, :4].astype(np.int32)
+                bboxs = model_output.xyxy[0].cpu().numpy()
+
+                scores = bboxs[:, 4]
+                remain_inds = scores > detector_score_threshold
+                bbox_list = bboxs[remain_inds]
             else:
                 # FASTER RCNN
                 outputs = detector_model(model_input)
                 labels = outputs[0]['labels'].cpu().detach().numpy()
                 # print(labels)
                 pred_scores = outputs[0]['scores'].cpu().detach().numpy()
-                pred_bboxes = outputs[0]['boxes'].cpu().detach().numpy()
+                bboxes = outputs[0]['boxes'].cpu().detach().numpy()
 
-                bbox_list = pred_bboxes[pred_scores >= detector_score_threshold]
+                bboxs = np.zeros([len(bboxes), 5])
+                bboxs[:, :4] = [bbox for bbox in bboxes]
+                bboxs[:, 4] = [score for score in pred_scores]
+
+                bbox_list = bboxs[pred_scores >= detector_score_threshold]
                 labels = labels[pred_scores >= detector_score_threshold]
                 bbox_list = bbox_list[labels == 1]
+
             bbox_list_copy = bbox_list.copy()
 
             pose_time = time.time()
@@ -240,7 +250,7 @@ def main():
                 curr_bbox = bbox_list[n]
                 curr_bbox[2] = curr_bbox[2] - curr_bbox[0]
                 curr_bbox[3] = curr_bbox[3] - curr_bbox[1]
-                bbox = rootnet_process_bbox(np.array(bbox_list[n]), original_img_width, original_img_height)
+                bbox = rootnet_process_bbox(np.array(bbox_list[n, :4]), original_img_width, original_img_height)
                 img, img2bb_trans = rootnet_generate_patch_image(original_img, bbox, False, 0.0)
                 img = rootnet_transform(img).cpu()[None, :, :, :]
 
@@ -264,7 +274,7 @@ def main():
             output_pose_3d = np.zeros((person_num, joint_num, 3))
             outpose_tracking = np.zeros((person_num, joint_num, 3))
             for n in range(person_num):
-                bbox = process_bbox(np.array(bbox_list[n]), original_img_width, original_img_height)
+                bbox = process_bbox(np.array(bbox_list[n, :4]), original_img_width, original_img_height)
                 img, img2bb_trans = generate_patch_image(original_img, bbox, False, 1.0, 0.0, False)
                 img = posenet_transform(img).cpu()[None, :, :, :]
 
@@ -299,52 +309,68 @@ def main():
             # tracking
             vis_img = original_img.copy()
 
-            if use_byteTrack:
-                online_target = tracker.update(bbox_list_copy, [original_img_height, original_img_width], (800, 1440))
-            else:
-                tracker = skeleton_track(outpose_tracking, vis_img, tracker, root_pt, bbox_list_copy)
-
-            tracking_predictions = []
-            tracking_colors = []
-            tracking_id = []
-            tracking_skeletons = []
             tracking_bboxes = []
-            for i in range(len(tracker.tracks)):
-                if len(tracker.tracks[i].trace) > 1:
-                    tracking_predictions.append(np.array(pixel2world(int(tracker.tracks[i].trace[-1][0, 0]),
-                                                            int(tracker.tracks[i].trace[-1][0, 1]),
-                                                            int(tracker.tracks[i].trace[-1][0, 2]),
-                                                            original_img_width, original_img_height,
-                                                            focal_rgb[0], focal_rgb[1],
-                                                            princpt_rgb[0], princpt_rgb[1])))
-                    tracking_colors.append(tracker.tracks[i].track_color)
-                    tracking_id.append(tracker.tracks[i].trackId)
-                    current_skeleton = tracker.tracks[i].track_skeleton.copy()
+            tracking_ids = []
+            tracking_scores = []
+            tracking_skeletons = []
+            tracking_skeletons_3D = []
+
+            if use_byteTrack:
+                tracking_targets = tracker.update(bbox_list_copy[:,:5], outpose_tracking, [original_img_height, original_img_width], (original_img_height, original_img_width))
+                for t in tracking_targets:
+                    tlwh = t.tlwh
+                    tid = t.track_id
+                    vertical = tlwh[2] / tlwh[3] > args.aspect_ratio_thresh
+                    if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
+                        tracking_bboxes.append(tlwh)
+                        tracking_ids.append(tid)
+                        tracking_scores.append(t.score)
+                        tracking_skeletons.append(t.skeleton)
+
+            else:
+                tracker.update(outpose_tracking, root_pt, bbox_list_copy[:,:4])
+                for t in tracker.tracks:
+                    # tracking_predictions.append(np.array(pixel2world(int(online_targets.tracks[i].trace[-1][0, 0]),
+                    #                                         int(online_targets.tracks[i].trace[-1][0, 1]),
+                    #                                         int(online_targets.tracks[i].trace[-1][0, 2]),
+                    #                                         original_img_width, original_img_height,
+                    #                                         focal_rgb[0], focal_rgb[1],
+                    #                                         princpt_rgb[0], princpt_rgb[1])))
+                    tracking_ids.append(t.trackId)
+                    current_skeleton = t.track_skeleton.copy()
                     current_skeleton = pixel2cam(current_skeleton, focal_rgb, princpt_rgb)
-                    tracking_skeletons.append(current_skeleton)
-                    tracking_bboxes.append(tracker.tracks[i].track_bbox)
-                # for k in range(len(tracker.tracks[n].trace)):
-                #     tracking_traces.append(pixel2cam(tracker.tracks[n].trace[k], focal_rgb, princpt_rgb))
+                    tracking_skeletons_3D.append(current_skeleton)
+                    tracking_skeletons.append(t.track_skeleton)
+                    curr_bbox = t.track_bbox
+                    curr_bbox[2] = curr_bbox[2] - curr_bbox[0]
+                    curr_bbox[3] = curr_bbox[3] - curr_bbox[1]
+                    tracking_bboxes.append(curr_bbox)
 
+            vis_img = plot_tracking(
+                vis_img, tracking_bboxes, tracking_ids, tracking_skeletons, skeleton, joint_num, frame_id=nFrame,
+                fps=1. / (time.time() - whole_time)
+            )
             # extract 2d poses
-            for n in range(person_num):
-                vis_kps = np.zeros((3, joint_num))
-                # vis_kps[0, :] = output_pose_2d[n][:, 0]
-                # vis_kps[1, :] = output_pose_2d[n][:, 1]
-                vis_kps[0, :] = tracker.tracks[n].track_skeleton[:,0]
-                vis_kps[1, :] = tracker.tracks[n].track_skeleton[:,1]
-                vis_kps[2, :] = 1
-                img_2d = vis_keypoints_track(vis_img, vis_kps, skeleton, tracker.tracks[n].track_color)
-                img_2d = cv2.rectangle(img_2d,
-                                       (int(tracker.tracks[n].track_bbox[0]), int(tracker.tracks[n].track_bbox[1])),
-                                       (int(tracker.tracks[n].track_bbox[2]), int(tracker.tracks[n].track_bbox[3])),
-                                       tracker.tracks[n].track_color, thickness=1)
+                # for n in range(person_num):
+                #     vis_kps = np.zeros((3, joint_num))
+                #     # vis_kps[0, :] = output_pose_2d[n][:, 0]
+                #     # vis_kps[1, :] = output_pose_2d[n][:, 1]
+                #     vis_kps[0, :] = online_targets.tracks[n].track_skeleton[:,0]
+                #     vis_kps[1, :] = online_targets.tracks[n].track_skeleton[:,1]
+                #     vis_kps[2, :] = 1
+                #     img_2d = vis_keypoints_track(vis_img, vis_kps, skeleton, online_targets.tracks[n].track_color)
+                #     img_2d = cv2.rectangle(img_2d,
+                #                            (int(online_targets.tracks[n].track_bbox[0]), int(online_targets.tracks[n].track_bbox[1])),
+                #                            (int(online_targets.tracks[n].track_bbox[2]), int(online_targets.tracks[n].track_bbox[3])),
+                #                            online_targets.tracks[n].track_color, thickness=1)
+                #
+                #     cv2.putText(img_2d, str(online_targets.tracks[n].trackId),
+                #                 (int(online_targets.tracks[n].track_bbox[0]), int(online_targets.tracks[n].track_bbox[1])-10), 0, 0.5,
+                #                 online_targets.tracks[n].track_color, 2)
+                #     vis_img = img_2d
 
-                cv2.putText(img_2d, str(tracker.tracks[n].trackId),
-                            (int(tracker.tracks[n].track_bbox[0]), int(tracker.tracks[n].track_bbox[1])-10), 0, 0.5,
-                            tracker.tracks[n].track_color, 2)
-                vis_img = img_2d
-
+            cv2.namedWindow("2D Detection + Pose", cv2.WINDOW_NORMAL)
+            vis_img = cv2.resize(vis_img, (1080, 640))
             cv2.imshow('image', vis_img)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
@@ -366,19 +392,37 @@ def main():
             pointcloud = depthmap2pointcloud(depth, focal_depth[0], focal_depth[1], princpt_depth[0], princpt_depth[1])
 
             # points = np.array([output_pose_3d, pointcloud, vis_img, tracking_predictions, tracking_traces, tracking_colors, tracking_id])
-            points = np.array(
-                [tracking_skeletons, pointcloud, vis_img, tracking_predictions, tracking_colors,
-                 tracking_id])
-            # points = np.array([output_pose_3d])
+
 
             if bboxdiff:
+                points = np.array([output_pose_3d, pointcloud, vis_img])
                 output_dir = Path(f"results/{source}/{sequence}_{weights}_20")
                 output_dir.mkdir(parents=True, exist_ok=True)
             elif track:
-                output_dir = Path(f"results/tracking/{source}/{sequence}_{weights}")
+                points = np.array([tracking_skeletons_3D, pointcloud, vis_img, tracking_ids])
+                mode = "tracking"
+                if use_yolo:
+                    detector = "yolo"
+                    if use_byteTrack:
+                        tracker_type = "byteTrack"
+                    else:
+                        tracker_type = "kalmanTrack"
+                else:
+                    detector = "frcnn"
+                    if use_byteTrack:
+                        tracker_type = "byteTrack"
+                    else:
+                        tracker_type = "kalmanTrack"
+                output_dir = Path(f"results/{mode}/{detector}/{tracker_type}/{source}/{sequence}_{weights}")
                 output_dir.mkdir(parents=True, exist_ok=True)
             else:
-                output_dir = Path(f"results/{source}/{sequence}_{weights}")
+                points = np.array([output_pose_3d, pointcloud, vis_img])
+                mode = "noTracking"
+                if use_yolo:
+                    detector = "yolo"
+                else:
+                    detector = "frcnn"
+                output_dir = Path(f"results/{mode}/{detector}/{source}/{sequence}_{weights}")
                 output_dir.mkdir(parents=True, exist_ok=True)
 
             np.save(f"{output_dir}/{nFrame:05}_pose3D.npy", points)
