@@ -30,7 +30,7 @@ import torchvision
 
 from pathlib import Path
 from posenet.common.posenet_utils.vis import vis_keypoints
-from d_visualization import depthmap2pointcloud
+from visualization3D import depthmap2pointcloud
 
 
 def main():

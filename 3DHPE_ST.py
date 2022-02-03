@@ -186,8 +186,8 @@ def main():
     # iterate on the frames
     for nFrame, filename in enumerate(rgb_data_dir.iterdir()):
         # load the frame
-        if nFrame < 231:
-            continue
+        # if nFrame < 344:
+        #     continue
         original_img = cv2.imread(str(rgb_data_dir / filename.name))
         if original_img is None:
             print("Loading image failed.")
@@ -236,7 +236,6 @@ def main():
         # calculate roots
         person_num = len(bbox_list)
         root_depth_list = np.zeros(person_num)
-        cv2.imwrite('results/input.png', original_img)
         for n in range(person_num):
             # fix each bbox from (x_min, y_min, x_max, y_max) to (x_min, y_min, width, height)
             curr_bbox = bbox_list[n]
@@ -246,16 +245,6 @@ def main():
             img, img2bb_trans = rootnet_generate_patch_image(original_img, bbox, False, 0.0)
 
             img = rootnet_transform(img).cpu()[None, :, :, :]
-
-            img_in = img[0].cpu().numpy()
-            vis_img = img_in.copy()
-            vis_img = vis_img * np.array(rootnet_cfg.pixel_std).reshape(3, 1, 1) + np.array(
-                rootnet_cfg.pixel_mean).reshape(3, 1, 1)
-            vis_img = vis_img.astype(np.uint8)
-            vis_img = vis_img[::-1, :, :]
-            vis_img = np.transpose(vis_img, (1, 2, 0)).copy()
-            cv2.imwrite('results/input_root_2d_' + str(n) + '.png', vis_img)
-
 
             k_value = np.array([math.sqrt(
                 bbox_real[0] * bbox_real[1] * focal_rgb[0] * focal_rgb[1] / (
@@ -268,19 +257,6 @@ def main():
             img = img[0].cpu().numpy()
             root_3d = root_3d[0].cpu().numpy()
             root_depth_list[n] = root_3d[2]
-
-            vis_img = img_in.copy()
-            vis_img = vis_img * np.array(posenet_cfg.pixel_std).reshape(3, 1, 1) + np.array(
-                posenet_cfg.pixel_mean).reshape(3, 1, 1)
-            vis_img = vis_img.astype(np.uint8)
-            vis_img = vis_img[::-1, :, :]
-            vis_img = np.transpose(vis_img, (1, 2, 0)).copy()
-            vis_root = np.zeros((2))
-            vis_root[0] = root_3d[0] / rootnet_cfg.output_shape[1] * rootnet_cfg.input_shape[1]
-            vis_root[1] = root_3d[1] / rootnet_cfg.output_shape[0] * rootnet_cfg.input_shape[0]
-            cv2.circle(vis_img, (int(vis_root[0]), int(vis_root[1])), radius=5, color=(0, 255, 0), thickness=-1,
-                       lineType=cv2.LINE_AA)
-            cv2.imwrite('results/output_root_2d_' + str(n) + '.png', vis_img)
 
         root_time_stop = time.time()
         if person_num < 1:
@@ -296,14 +272,6 @@ def main():
             bbox = process_bbox(np.array(bbox_list[n, :4]), original_img_width, original_img_height)
             img, img2bb_trans = generate_patch_image(original_img, bbox, False, 1.0, 0.0, False)
             img = posenet_transform(img).cpu()[None, :, :, :]
-
-            img_in = img[0].cpu().numpy()
-            vis_img = img_in.copy()
-            vis_img = vis_img * np.array(posenet_cfg.pixel_std).reshape(3, 1, 1) + np.array(posenet_cfg.pixel_mean).reshape(3, 1, 1)
-            vis_img = vis_img.astype(np.uint8)
-            vis_img = vis_img[::-1, :, :]
-            vis_img = np.transpose(vis_img, (1, 2, 0)).copy()
-            cv2.imwrite('results/input_pose_2d_' + str(n) + '.png', vis_img)
 
             # forward
             with torch.no_grad():
@@ -325,23 +293,6 @@ def main():
             outpose_tracking[n] = pose_3d
             pose_3d = pixel2cam(pose_3d, focal_rgb, princpt_rgb)
             output_pose_3d[n] = pose_3d
-
-            img = img[0].cpu().numpy()
-            vis_img = img.copy()
-            vis_img = vis_img * np.array(rootnet_cfg.pixel_std).reshape(3, 1, 1) + np.array(
-                rootnet_cfg.pixel_mean).reshape(3, 1, 1)
-            vis_img = vis_img.astype(np.uint8)
-            vis_img = vis_img[::-1, :, :]
-            vis_img = np.transpose(vis_img, (1, 2, 0)).copy()
-            vis_kps = np.zeros((3, joint_num))
-            vis_kps[0, :] = output_pose_2d_vis[n][:, 0]
-            vis_kps[1, :] = output_pose_2d_vis[n][:, 1]
-            vis_kps[2, :] = 1
-            vis_img = vis_keypoints(vis_img, vis_kps, skeleton)
-            cv2.imwrite('results/output_pose_2d_' + str(n) + '.png', vis_img)
-            # cv2.imshow('input', vis_img)
-
-
 
         pose_time_stop = time.time()
         whole_time_stop = time.time()
@@ -412,36 +363,16 @@ def main():
         print(time_stats)
 
         vis_img = original_img.copy()
-        for n in range(person_num):
-            img_2d = cv2.rectangle(vis_img,
-                                   (int(bbox_list_copy[n][0]), int(bbox_list_copy[n][1])),
-                                   (int(bbox_list_copy[n][2]), int(bbox_list_copy[n][3])),
-                                   (0, 255, 0), thickness=1)
-        cv2.imwrite('results/output_bbox_2d.jpg', img_2d)
-        vis_img = original_img.copy()
-        for n in range(person_num):
-            vis_kps = np.zeros((3, joint_num))
-            vis_kps[0, :] = output_pose_2d[n][:, 0]
-            vis_kps[1, :] = output_pose_2d[n][:, 1]
-            vis_kps[2, :] = 1
-            vis_img = vis_keypoints(vis_img, vis_kps, skeleton)
-        cv2.imwrite('results/output_pose_2d.jpg', vis_img)
-        # cv2.imshow('output_pose_2d.jpg', vis_img)
-
-
-        vis_img = original_img.copy()
         vis_img = plot_tracking(
             vis_img, tracking_bboxes, tracking_ids, tracking_skeletons, skeleton, joint_num, frame_id=nFrame,
             fps=1. / whole_time
         )
 
-        # cv2.namedWindow("2D Detection + Pose", cv2.WINDOW_NORMAL)
-        # vis_img = cv2.resize(vis_img, (1080, 640))
-        cv2.imwrite('results/output_tracking_2d.jpg', vis_img)
+        cv2.namedWindow("2D Detection + Pose", cv2.WINDOW_NORMAL)
+        vis_img = cv2.resize(vis_img, (1080, 640))
         cv2.imshow('2D Detection + Pose', vis_img)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     cv2.destroyAllWindows()
-        cv2.waitKey(0)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            cv2.destroyAllWindows()
 
         # find the depth frame correspondent to the rgb frame
         rgb_frame_name = f"{(int(filename.stem) - 1):05}"

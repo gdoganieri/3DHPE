@@ -35,18 +35,19 @@ class Tracks(object):
 class RootTracker(object):
     """docstring for Tracker"""
 
-    def __init__(self, dist_threshold, max_frame_skipped, max_trace_length):
+    def __init__(self, dist_threshold, max_frame_skipped):
         super(RootTracker, self).__init__()
         self.dist_threshold = dist_threshold
         self.max_frame_skipped = max_frame_skipped
-        self.max_trace_length = max_trace_length
         self.trackId = 0
         self.tracks = []
         self.del_tracks = []
         self.un_assigned_tracks = []
 
     def update(self, skeletons, root_pt, bboxes):
+        '''Detections'''
         detections = skeletons[:, root_pt]
+        ''' Add newly detected tracklets to tracks'''
         if len(self.tracks) == 0:
             for i in range(detections.shape[0]):
                 track = Tracks(detections[i], self.trackId, skeletons[i], bboxes[i])
@@ -55,17 +56,20 @@ class RootTracker(object):
 
         N = len(self.tracks)
         M = len(detections)
+        '''Compute the cost matrix of the Hungarian Algorithm'''
         cost = []
         for i in range(N):
             diff = np.linalg.norm(self.tracks[i].prediction - detections.reshape(-1, 3), axis=1)
             cost.append(diff)
 
+        '''Perform the data association'''
         cost = np.array(cost) * 0.1
         row, col = linear_sum_assignment(cost)
         assignment = [-1] * N
         for i in range(len(row)):
             assignment[row[i]] = col[i]
 
+        '''Check the correctness of the assignments'''
         for i in range(len(assignment)):
             if assignment[i] != -1:
                 if cost[i][assignment[i]] > self.dist_threshold:
@@ -76,6 +80,7 @@ class RootTracker(object):
             else:
                 self.tracks[i].skipped_frames += 1
 
+        '''Check if the track has to end'''
         for i in range(len(self.tracks)):
             if self.tracks[i].skipped_frames > self.max_frame_skipped:
                 self.del_tracks.append(i)
@@ -86,12 +91,14 @@ class RootTracker(object):
                 del assignment[i]
             self.del_tracks = []
 
+        '''Add new tracks from the new detections'''
         for i in range(len(detections)):
             if i not in assignment:
                 track = Tracks(detections[i], self.trackId, skeletons[i], bboxes[i])
                 self.trackId += 1
                 self.tracks.append(track)
 
+        '''Update the state'''
         for i in range(len(assignment)):
             if (assignment[i] != -1):
                 self.tracks[i].upTrack(skeletons[assignment[i]], bboxes[assignment[i]])
